@@ -10,9 +10,8 @@ import requests
 from functools import wraps
 
 # ---------- CONFIG ----------
-WALLET_ADDRESS = "TNdFkgfD5H6A3VTRvcW7riSC72DdrpHeSu"
+WALLET_ADDRESS = "TAMvBeCmd9VruNxPGjNamMR2wL9EMHNVnU"
 NETWORK_LABEL = "TRX (TRC20)"
-WALLET_LABEL = "Your USDT address ( TRC20 ):"
 
 VS_CURRENCY = "usd"
 FETCH_INTERVAL = 10         # backend fetch seconds (CoinGecko)
