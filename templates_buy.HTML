@@ -1,0 +1,247 @@
+{% extends "base.html" %}
+{% set active_nav = "home" %}
+{% block title %} - Buy Crypto{% endblock %}
+{% block extra_styles %}
+.provider-card{background:var(--card);border-radius:12px;padding:16px;margin-bottom:10px;border:2px solid var(--border);cursor:pointer;transition:.2s;display:flex;align-items:center;gap:14px}
+.provider-card.selected{border-color:var(--accent)}
+.provider-logo{width:42px;height:42px;border-radius:8px;object-fit:contain;background:#fff;padding:4px}
+.method-tab{flex:1;padding:11px;text-align:center;border-radius:8px;font-weight:600;cursor:pointer;font-size:14px;background:var(--bg);border:1px solid var(--border);transition:.2s;color:var(--muted)}
+.method-tab.active{background:var(--accent);color:var(--bg);border-color:var(--accent)}
+.coin-selector{display:flex;align-items:center;gap:10px;background:var(--card-hover);border-radius:10px;padding:12px 14px;cursor:pointer;border:1px solid var(--border)}
+.section-title{font-size:13px;color:var(--muted);font-weight:600;margin:16px 0 8px}
+.rate-row{display:flex;justify-content:space-between;padding:8px 0;font-size:13px;border-bottom:1px solid rgba(255,255,255,.04)}
+{% endblock %}
+{% block body %}
+<header class="navbar">
+  <div class="flex items-center gap-12">
+    <i class="fa-solid fa-arrow-left back-btn" onclick="window.location='/'"></i>
+    <div style="font-weight:800;font-size:17px">Buy Crypto</div>
+  </div>
+  <div class="nav-icons"><i class="fa-solid fa-clock-rotate-left" onclick="showOrderHistory()"></i></div>
+</header>
+
+<div style="padding:16px">
+  <!-- Method selector -->
+  <div style="display:flex;gap:8px;margin-bottom:20px">
+    <div class="method-tab active" id="mt-card" onclick="setMethod('card',this)"><i class="fa-solid fa-credit-card"></i> Card</div>
+    <div class="method-tab" id="mt-bank" onclick="setMethod('bank',this)"><i class="fa-solid fa-building-columns"></i> Bank</div>
+    <div class="method-tab" id="mt-p2p" onclick="window.location='/p2p'"><i class="fa-solid fa-users"></i> P2P</div>
+  </div>
+
+  <!-- Amount input -->
+  <div class="section-title">I want to spend</div>
+  <div class="input-group" style="margin-bottom:0">
+    <input id="fiatAmount" type="number" value="100" step="any" placeholder="100" oninput="getQuote()" style="font-size:22px;font-weight:800" aria-label="Fiat amount">
+    <div class="input-group" style="padding:0;margin:0;background:transparent;border:none">
+      <select id="fiatCurrency" onchange="getQuote()" style="background:transparent;border:none;color:var(--accent);padding:8px 0;outline:none;font-family:'Inter';font-weight:700;font-size:16px" aria-label="Fiat currency">
+        <option>USD</option><option>EUR</option><option>GBP</option><option>AUD</option><option>CAD</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Coin selector -->
+  <div class="section-title">I want to receive</div>
+  <div class="coin-selector" onclick="openCoinPicker()" id="coinSelector">
+    <img id="selectedCoinImg" src="https://assets.coingecko.com/coins/images/1/large/bitcoin.png" style="width:28px;height:28px;border-radius:50%" alt="BTC">
+    <div>
+      <div style="font-weight:700" id="selectedCoinSym">BTC</div>
+      <div class="text-muted" id="selectedCoinName">Bitcoin</div>
+    </div>
+    <i class="fa-solid fa-chevron-down" style="margin-left:auto;color:var(--muted)"></i>
+  </div>
+
+  <!-- Quote display -->
+  <div id="quoteBox" style="margin-top:16px">
+    <div id="quoteLoading" style="text-align:center;padding:20px;display:none"><div class="spinner"></div></div>
+    <div id="quoteContent" style="display:none">
+      <div class="rate-row"><span class="text-muted">You receive approx.</span><span id="qReceive" class="font-bold text-green">—</span></div>
+      <div class="rate-row"><span class="text-muted">Rate</span><span id="qRate">—</span></div>
+      <div class="rate-row"><span class="text-muted">Processing fee</span><span id="qFee">—</span></div>
+      <div class="rate-row" style="border:none"><span class="text-muted">Total charged</span><span id="qTotal" class="font-bold">—</span></div>
+    </div>
+  </div>
+
+  <!-- Providers -->
+  <div class="section-title">Choose provider</div>
+  <div id="providerList">
+    <div class="provider-card selected" id="prov-moonpay" onclick="selectProvider('moonpay')">
+      <div style="width:42px;height:42px;border-radius:8px;background:linear-gradient(135deg,#7C3AED,#DB2777);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;color:#fff">MOON</div>
+      <div>
+        <div style="font-weight:700">MoonPay</div>
+        <div class="text-muted">Instant · Credit/Debit</div>
+      </div>
+      <div style="margin-left:auto;text-align:right">
+        <div class="badge badge-green">Best Rate</div>
+        <div class="text-muted" style="font-size:11px;margin-top:4px">3.5% fee</div>
+      </div>
+    </div>
+    <div class="provider-card" id="prov-banxa" onclick="selectProvider('banxa')">
+      <div style="width:42px;height:42px;border-radius:8px;background:linear-gradient(135deg,#1D4ED8,#0891B2);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;color:#fff">BANX</div>
+      <div>
+        <div style="font-weight:700">Banxa</div>
+        <div class="text-muted">Bank Transfer</div>
+      </div>
+      <div style="margin-left:auto;text-align:right">
+        <div style="font-size:11px;color:var(--muted)">1.2% fee</div>
+      </div>
+    </div>
+    <div class="provider-card" id="prov-simplex" onclick="selectProvider('simplex')">
+      <div style="width:42px;height:42px;border-radius:8px;background:linear-gradient(135deg,#0ecb81,#1D4ED8);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:11px;color:#fff">SPLX</div>
+      <div>
+        <div style="font-weight:700">Simplex</div>
+        <div class="text-muted">Visa/Mastercard</div>
+      </div>
+      <div style="margin-left:auto;text-align:right">
+        <div style="font-size:11px;color:var(--muted)">3.8% fee</div>
+      </div>
+    </div>
+  </div>
+
+  <button id="buyBtn" class="btn btn-primary w-full" style="margin-top:20px;padding:16px;font-size:16px;font-weight:800" onclick="executeBuy()">Buy Now</button>
+  <div id="buyMsg" style="text-align:center;margin-top:10px;font-size:13px;font-weight:600"></div>
+</div>
+
+<!-- Coin Picker Modal -->
+<div id="coinPickerModal" class="modal-overlay" role="dialog" aria-modal="true">
+  <div class="modal-content">
+    <div class="m-title"><span>Select Asset</span><i class="fa-solid fa-xmark" onclick="closeModal('coinPickerModal')"></i></div>
+    <div class="search-box" style="margin-bottom:12px">
+      <i class="fa-solid fa-search text-muted"></i>
+      <input type="text" id="coinSearch" placeholder="Search coins" oninput="filterCoinPicker()" style="background:transparent;border:none;color:var(--text);width:100%;outline:none;margin-left:8px;font-family:'Inter';font-size:14px" aria-label="Search coins">
+    </div>
+    <div id="coinPickerList" style="max-height:350px;overflow-y:auto"></div>
+  </div>
+</div>
+
+<!-- Order History Modal -->
+<div id="historyModal" class="modal-overlay" role="dialog" aria-modal="true">
+  <div class="modal-content">
+    <div class="m-title"><span>Purchase History</span><i class="fa-solid fa-xmark" onclick="closeModal('historyModal')"></i></div>
+    <div id="historyList" style="max-height:400px;overflow-y:auto"></div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const clientPoll={{ client_poll }};
+let allCoins={}, selectedCoin='BTC', selectedMethod='card', selectedProvider='moonpay', quoteData=null;
+let debounceTimer=null;
+
+async function init(){
+  const res=await fetch('/api/prices');
+  const j=await res.json();
+  allCoins=j.data||{};
+  populateCoinPicker();
+  getQuote();
+}
+
+function setMethod(m, el){
+  selectedMethod=m;
+  document.querySelectorAll('.method-tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  getQuote();
+}
+
+function selectProvider(id){
+  selectedProvider=id;
+  document.querySelectorAll('.provider-card').forEach(c=>c.classList.remove('selected'));
+  document.getElementById('prov-'+id).classList.add('selected');
+  getQuote();
+}
+
+function getQuote(){
+  clearTimeout(debounceTimer);
+  debounceTimer=setTimeout(async()=>{
+    const amt=parseFloat(document.getElementById('fiatAmount').value)||0;
+    if(amt<=0)return;
+    document.getElementById('quoteLoading').style.display='block';
+    document.getElementById('quoteContent').style.display='none';
+    const res=await fetch('/api/buy_crypto/quote',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({symbol:selectedCoin,fiat_amount:amt,method:selectedMethod})});
+    const j=await res.json();
+    document.getElementById('quoteLoading').style.display='none';
+    if(j.ok){
+      quoteData=j;
+      document.getElementById('qReceive').innerText=j.crypto_amount.toFixed(8)+' '+j.symbol;
+      document.getElementById('qRate').innerText='1 '+j.symbol+' = $'+commaNum(j.rate.toFixed(2));
+      document.getElementById('qFee').innerText='$'+j.fee.toFixed(2);
+      document.getElementById('qTotal').innerText='$'+amt.toFixed(2)+' '+document.getElementById('fiatCurrency').value;
+      document.getElementById('quoteContent').style.display='block';
+    }
+  },400);
+}
+
+function openCoinPicker(){
+  document.getElementById('coinSearch').value='';
+  filterCoinPicker();
+  openModal('coinPickerModal');
+}
+
+function populateCoinPicker(){ filterCoinPicker(); }
+
+function filterCoinPicker(){
+  const q=(document.getElementById('coinSearch').value||'').toLowerCase();
+  const el=document.getElementById('coinPickerList');
+  const coins=Object.values(allCoins).filter(c=>!q||c.symbol.toLowerCase().includes(q)||c.name.toLowerCase().includes(q));
+  coins.sort((a,b)=>(b.market_cap||0)-(a.market_cap||0));
+  el.innerHTML=coins.slice(0,40).map(c=>`
+    <div style="display:flex;align-items:center;gap:12px;padding:12px;border-radius:8px;cursor:pointer;transition:.2s" 
+         onclick="selectCoin('${c.symbol}','${esc(c.name)}','${esc(c.image||'')}')">
+      <img src="${esc(c.image||'')}" style="width:28px;height:28px;border-radius:50%;background:#fff" alt="${c.symbol}" 
+           onerror="this.src='https://placehold.co/28x28/2b3139/848e9c?text=${c.symbol.slice(0,2)}'">
+      <div><div style="font-weight:700">${esc(c.symbol)}</div><div class="text-muted">${esc(c.name)}</div></div>
+      <div style="margin-left:auto;text-align:right">
+        <div style="font-weight:600">$${(c.price||0).toFixed(c.price>1?2:6)}</div>
+        <div class="${(c.change_24h||0)>=0?'text-green':'text-red'} text-muted">${c.change_24h>=0?'+':''}${(c.change_24h||0).toFixed(2)}%</div>
+      </div>
+    </div>`).join('');
+}
+
+function esc(s){return String(s||'').replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c]));}
+
+function selectCoin(sym, name, img){
+  selectedCoin=sym;
+  document.getElementById('selectedCoinSym').innerText=sym;
+  document.getElementById('selectedCoinName').innerText=name;
+  document.getElementById('selectedCoinImg').src=img||`https://placehold.co/28x28/2b3139/848e9c?text=${sym.slice(0,2)}`;
+  closeModal('coinPickerModal');
+  getQuote();
+}
+
+async function executeBuy(){
+  const amt=parseFloat(document.getElementById('fiatAmount').value)||0;
+  if(amt<=0){showToast('Enter a valid amount','error');return;}
+  if(!quoteData){showToast('Loading quote...','error');return;}
+  btnLoad('buyBtn',true);
+  const res=await fetch('/api/buy_crypto/execute',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({symbol:selectedCoin,fiat_amount:amt,method:selectedMethod})});
+  const j=await res.json();
+  const msg=document.getElementById('buyMsg');
+  if(j.ok){
+    msg.innerHTML=`<span class="text-green"><i class="fa-solid fa-circle-check"></i> Successfully purchased ${j.qty.toFixed(8)} ${j.symbol}!</span>`;
+    showToast('Purchase complete! ✓','success');
+  } else { msg.innerText=j.error||'Error'; msg.className='text-red'; }
+  btnLoad('buyBtn',false,'Buy Now');
+}
+
+async function showOrderHistory(){
+  openModal('historyModal');
+  const res=await fetch('/api/wallet/history');
+  const j=await res.json();
+  const buys=(j.history||[]).filter(h=>h.source==='buy_crypto'||h.type==='trade');
+  const el=document.getElementById('historyList');
+  if(!buys.length){el.innerHTML='<div style="text-align:center;padding:32px;color:var(--muted)">No purchases yet</div>';return;}
+  el.innerHTML=buys.slice(0,20).map(h=>`
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--border)">
+      <div><div style="font-weight:700">${esc(h.symbol)}</div>
+      <div class="text-muted">${new Date(h.timestamp*1000).toLocaleDateString()}</div></div>
+      <div style="text-align:right">
+        <div class="text-green font-bold">+${h.amount.toFixed(6)}</div>
+        <div class="text-muted">@ $${(h.price||0).toFixed(2)}</div>
+      </div>
+    </div>`).join('');
+}
+
+init();
+</script>
+{% endblock %}
