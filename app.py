@@ -905,6 +905,10 @@ def api_buy_crypto_execute():
 # ═══════════════════════════════════════════════════════════════════════════════
 # Entry point
 # ═══════════════════════════════════════════════════════════════════════════════
+@app.route('/')
+def index():
+    return render_template('home.html')
+
 if __name__ == "__main__":
     fetch_prices_once()
     _seed_p2p()
