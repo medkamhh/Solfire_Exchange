@@ -1,0 +1,467 @@
+{% extends "base.html" %}
+{% set active_nav = "home" %}
+{% block title %} - Home{% endblock %}
+
+{% block extra_styles %}
+.hero{padding:20px 16px;background:linear-gradient(180deg,var(--card) 0%,var(--bg) 100%)}
+.balance-title{font-size:14px;color:var(--muted);margin-bottom:4px;display:flex;justify-content:space-between}
+.balance-val{font-size:32px;font-weight:800;margin-bottom:4px;display:flex;align-items:baseline;gap:6px}
+.pnl{font-size:14px;margin-bottom:16px;font-weight:600}
+.action-buttons{display:flex;gap:10px}
+.btn-action{flex:1;background:var(--card-hover);border:none;padding:12px 0;border-radius:8px;color:var(--text);font-weight:600;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:13px;transition:.2s}
+.btn-action i{font-size:18px}.btn-action.primary{background:var(--accent);color:var(--bg)}
+.btn-action:active{transform:scale(.96)}
+.quick-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;padding:16px;text-align:center;font-size:12px;font-weight:500}
+.q-item{display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--muted);cursor:pointer}
+.q-icon{width:44px;height:44px;background:var(--card);border-radius:12px;display:flex;justify-content:center;align-items:center;font-size:18px;color:var(--accent);transition:.2s;border:1px solid var(--border)}
+.q-item:active .q-icon{background:var(--card-hover);transform:scale(.95)}
+.markets-container{padding:0 16px}
+.tabs{display:flex;gap:20px;border-bottom:1px solid var(--border);margin-bottom:12px;overflow-x:auto;white-space:nowrap}
+.tabs::-webkit-scrollbar{display:none}
+.tab{padding-bottom:10px;color:var(--muted);font-weight:600;cursor:pointer;font-size:14px;transition:.2s;border-bottom:2px solid transparent;flex-shrink:0}
+.tab.active{color:var(--text);border-bottom-color:var(--accent)}
+.search-box{display:flex;align-items:center;background:var(--card);border-radius:8px;padding:8px 12px;margin-bottom:14px}
+.search-box input{background:transparent;border:none;color:var(--text);width:100%;outline:none;margin-left:8px;font-family:'Inter';font-size:14px}
+.market-header{display:grid;grid-template-columns:2fr 1fr 1fr;padding:8px 0;font-size:12px;color:var(--muted);font-weight:600}
+.market-header div:nth-child(2),.market-header div:nth-child(3){text-align:right}
+.coin-row{display:grid;grid-template-columns:2fr 1fr 1fr;padding:13px 0;align-items:center;border-bottom:1px solid rgba(255,255,255,.03);cursor:pointer;transition:background .2s}
+.coin-row:active{background:var(--card)}.coin-info{display:flex;align-items:center;gap:12px}
+.coin-img{width:30px;height:30px;border-radius:50%;object-fit:cover;background:#fff}
+.price-col{text-align:right;font-weight:600;font-size:15px;transition:color .3s}
+.change-btn{justify-self:end;padding:5px 9px;border-radius:4px;font-size:12px;font-weight:600;width:72px;text-align:center}
+.timeframe-bar{display:none;padding:8px 0 4px;gap:8px}
+.timeframe-bar.visible{display:flex}
+.tf-btn{padding:4px 12px;border-radius:20px;background:var(--card-hover);border:none;color:var(--muted);font-size:12px;font-weight:600;cursor:pointer;font-family:'Inter';transition:.2s}
+.tf-btn.active{background:var(--accent);color:var(--bg)}
+/* Trade Modal */
+.trade-tabs{display:flex;gap:10px;margin-bottom:16px}
+.trade-btn{flex:1;padding:10px;text-align:center;border-radius:8px;font-weight:700;cursor:pointer;background:var(--bg);border:1px solid var(--border);font-family:'Inter'}
+.trade-btn.buy.selected{background:var(--green);color:#fff;border-color:var(--green)}
+.trade-btn.sell.selected{background:var(--red);color:#fff;border-color:var(--red)}
+.action-btn-large{width:100%;padding:15px;border-radius:8px;font-weight:700;font-size:15px;border:none;cursor:pointer;margin-top:10px;color:#fff;font-family:'Inter'}
+.mini-ob{font-family:monospace;font-size:12px;margin-bottom:16px}
+.ob-row{display:flex;justify-content:space-between;margin-bottom:4px}
+{% endblock %}
+
+{% block body %}
+<header class="navbar" role="banner">
+  <div class="brand" onclick="window.location='/'"><i class="fa-solid fa-fire" aria-hidden="true"></i> SOLFIRE</div>
+  <div class="nav-icons">
+    <i class="fa-solid fa-magnifying-glass" onclick="document.getElementById('searchInput').focus();showToast('Type to search coins')" aria-label="Search"></i>
+    <i class="fa-solid fa-qrcode" onclick="openModal('depositModal')" aria-label="QR Deposit"></i>
+    <i class="fa-regular fa-bell" onclick="showToast('No new notifications')" aria-label="Notifications"></i>
+  </div>
+</header>
+
+<section class="hero" aria-label="Balance overview">
+  <div class="balance-title">
+    <span>Total Balance</span>
+    <i class="fa-regular fa-eye" onclick="toggleBalance()" aria-label="Toggle balance visibility" style="cursor:pointer"></i>
+  </div>
+  <div class="balance-val"><span id="usdtBalance">0.00</span><span style="font-size:16px;font-weight:600">USDT</span></div>
+  <div class="pnl text-green" id="dailyPnl">+0.00 (1.50%) Today</div>
+  <div class="action-buttons">
+    <button class="btn-action primary" onclick="openModal('depositModal')" aria-label="Deposit">
+      <i class="fa-solid fa-wallet" aria-hidden="true"></i> Deposit</button>
+    <button class="btn-action" onclick="openWithdrawModal()" aria-label="Withdraw">
+      <i class="fa-solid fa-paper-plane" aria-hidden="true"></i> Withdraw</button>
+    <button class="btn-action" onclick="openModal('transferModal')" aria-label="Transfer">
+      <i class="fa-solid fa-right-left" aria-hidden="true"></i> Transfer</button>
+  </div>
+</section>
+
+<section class="quick-grid" aria-label="Quick actions">
+  <div class="q-item" onclick="window.location='/p2p'" role="button" aria-label="P2P Trading">
+    <div class="q-icon"><i class="fa-solid fa-users" aria-hidden="true"></i></div>P2P Trading</div>
+  <div class="q-item" onclick="window.location='/buy-crypto'" role="button" aria-label="Buy Crypto">
+    <div class="q-icon"><i class="fa-solid fa-credit-card" aria-hidden="true"></i></div>Buy Crypto</div>
+  <div class="q-item" onclick="window.location='/earn'" role="button" aria-label="Earn">
+    <div class="q-icon"><i class="fa-solid fa-piggy-bank" aria-hidden="true"></i></div>Earn</div>
+  <div class="q-item" onclick="window.location='/more'" role="button" aria-label="More">
+    <div class="q-icon" style="color:var(--text)"><i class="fa-solid fa-ellipsis" aria-hidden="true"></i></div>More</div>
+</section>
+
+<div class="section-div"></div>
+<section class="markets-container" style="padding-top:16px" aria-label="Market data">
+  <div class="tabs" role="tablist">
+    <div class="tab" role="tab" onclick="switchTab(this,'Favorites')"><i class="fa-solid fa-star" style="font-size:11px"></i> Favorites</div>
+    <div class="tab active" role="tab" aria-selected="true" onclick="switchTab(this,'Hot')">Hot</div>
+    <div class="tab" role="tab" onclick="switchTab(this,'Gainers')">Gainers</div>
+    <div class="tab" role="tab" onclick="switchTab(this,'Losers')">Losers</div>
+    <div class="tab" role="tab" onclick="switchTab(this,'New Listing')">New Listing</div>
+  </div>
+  <div class="timeframe-bar" id="timeframeBar">
+    <button class="tf-btn active" onclick="setTimeframe(this,'24h')">24H</button>
+    <button class="tf-btn" onclick="setTimeframe(this,'1h')">1H</button>
+    <button class="tf-btn" onclick="setTimeframe(this,'7d')">7D</button>
+  </div>
+  <div class="search-box">
+    <i class="fa-solid fa-search text-muted" aria-hidden="true"></i>
+    <input type="text" id="searchInput" placeholder="Search Coin Pairs" aria-label="Search coins">
+  </div>
+  <div class="market-header" aria-hidden="true">
+    <div>Name / Vol</div><div>Last Price</div><div>24h Chg%</div>
+  </div>
+  <div id="marketsList" role="list"></div>
+</section>
+
+<!-- ═══ DEPOSIT MODAL (PRESERVED EXACTLY) ═══ -->
+<div id="depositModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Deposit Crypto">
+  <div class="modal-content">
+    <div class="m-title"><span>Deposit Crypto</span><i class="fa-solid fa-xmark" onclick="closeModal('depositModal')" aria-label="Close"></i></div>
+    <div style="background:var(--bg);padding:20px;border-radius:12px;margin-bottom:16px;">
+      <div class="text-muted" style="margin-bottom:12px;font-weight:600;font-size:14px;">your wallet address :</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;background:var(--card);padding:16px;border-radius:8px;border:1px solid var(--border);">
+        <span id="depAddress" style="font-family:monospace;font-size:14px;word-break:break-all;color:var(--text);font-weight:700;">TAMvBeCmd9VruNxPGjNamMR2wL9EMHNVnU</span>
+        <div onclick="copyDepAddress()" style="background:rgba(252,213,53,.1);padding:10px;border-radius:8px;cursor:pointer;margin-left:16px;transition:.2s;">
+          <i class="fa-regular fa-copy" style="color:var(--accent);font-size:20px;" aria-label="Copy address"></i>
+        </div>
+      </div>
+      <div class="text-muted" style="margin-top:20px;font-weight:600;font-size:14px;">The network : TRX ( TRC20 )</div>
+    </div>
+    <div id="copyMsg" class="text-green" style="text-align:center;font-size:14px;font-weight:700;height:20px;"></div>
+  </div>
+</div>
+
+<!-- Transfer Modal -->
+<div id="transferModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Transfer funds">
+  <div class="modal-content">
+    <div class="m-title"><span>Transfer</span><i class="fa-solid fa-xmark" onclick="closeModal('transferModal')"></i></div>
+    <div class="input-group" style="padding:14px;background:var(--card-hover);">
+      <div class="input-label" style="width:50px">From</div><div style="font-weight:700">Spot Wallet</div></div>
+    <div style="text-align:center;color:var(--accent);margin-bottom:8px"><i class="fa-solid fa-arrow-down"></i></div>
+    <div class="input-group" style="padding:14px;background:var(--card-hover);">
+      <div class="input-label" style="width:50px">To</div><div style="font-weight:700">Futures Wallet</div></div>
+    <div class="input-group" style="margin-top:20px">
+      <div class="input-label" style="width:60px">Coin</div>
+      <input type="text" value="USDT" readonly style="font-weight:700"></div>
+    <div class="input-group">
+      <div class="input-label" style="width:60px">Amount</div>
+      <input id="transferAmount" type="number" placeholder="Enter amount" aria-label="Transfer amount">
+      <div class="input-suffix text-accent" style="cursor:pointer" onclick="document.getElementById('transferAmount').value=userUsdt.toFixed(2)">MAX</div>
+    </div>
+    <button class="btn btn-primary w-full" style="margin-top:8px" onclick="doTransfer()">Confirm Transfer</button>
+  </div>
+</div>
+
+<!-- Withdraw (Send) Modal -->
+<div id="sendModal" class="modal-overlay" role="dialog" aria-modal="true" aria-label="Withdraw USDT">
+  <div class="modal-content">
+    <div class="m-title"><span>Withdraw USDT</span><i class="fa-solid fa-xmark" onclick="closeModal('sendModal')"></i></div>
+    <div class="input-group">
+      <div class="input-label" style="width:60px">Address</div>
+      <input id="sendAddress" type="text" placeholder="Paste wallet address" aria-label="Destination address">
+      <i class="fa-solid fa-paste text-muted" onclick="navigator.clipboard.readText().then(t=>document.getElementById('sendAddress').value=t).catch(()=>showToast('Allow clipboard access'))" style="cursor:pointer"></i>
+    </div>
+    <div class="input-group" style="padding:0">
+      <select id="sendNetwork" aria-label="Network" style="width:100%;background:transparent;border:none;color:var(--text);padding:14px;outline:none;font-family:'Inter';font-weight:600">
+        <option>Tron (TRC20)</option>
+        <option>Ethereum (ERC20)</option>
+        <option>BNB Smart Chain (BEP20)</option>
+        <option>Solana (SOL)</option>
+        <option>Arbitrum (ARB)</option>
+        <option>Optimism (OP)</option>
+        <option>Polygon (MATIC)</option>
+        <option>Avalanche C-Chain (AVAX)</option>
+      </select>
+    </div>
+    <div class="input-group">
+      <div class="input-label" style="width:60px">Amount</div>
+      <input id="sendAmount" type="number" step="any" placeholder="Min 10" aria-label="Withdraw amount">
+      <div class="input-suffix text-accent" style="cursor:pointer" onclick="document.getElementById('sendAmount').value=userUsdt.toFixed(2)">MAX</div>
+    </div>
+    <div style="display:flex;justify-content:space-between;margin-bottom:22px;font-size:13px">
+      <span class="text-muted">Available:</span>
+      <span id="sendAvailable" class="font-bold">0.00 USDT</span>
+    </div>
+    <button class="btn btn-primary w-full" onclick="doSend()">Withdraw</button>
+    <div id="sendMsg" style="text-align:center;margin-top:10px;font-size:13px;font-weight:600"></div>
+  </div>
+</div>
+
+<!-- Trade Modal -->
+<div id="tradeModal" class="modal-overlay" role="dialog" aria-modal="true">
+  <div class="modal-content">
+    <div class="m-title"><span id="tradeTitle">BTC / USDT</span><i class="fa-solid fa-xmark" onclick="closeModal('tradeModal')"></i></div>
+    <div style="display:flex;gap:20px">
+      <div style="flex:1">
+        <div class="trade-tabs">
+          <div id="btnBuy" class="trade-btn buy selected" onclick="setTradeSide('buy')" role="button">Buy</div>
+          <div id="btnSell" class="trade-btn sell" onclick="setTradeSide('sell')" role="button">Sell</div>
+        </div>
+        <div class="input-group" style="padding:0">
+          <select id="tradeType" aria-label="Order type" style="width:100%;background:transparent;border:none;color:var(--text);padding:14px;outline:none;font-family:'Inter';font-weight:600">
+            <option value="market">Market</option>
+            <option value="limit">Limit</option>
+          </select>
+        </div>
+        <div class="input-group" id="limitBox" style="display:none">
+          <div class="input-label">Price</div>
+          <input id="tradeLimit" type="number" step="any" aria-label="Limit price">
+          <div class="input-suffix">USDT</div>
+        </div>
+        <div class="input-group">
+          <div class="input-label">Qty</div>
+          <input id="tradeQty" type="number" step="any" value="0.01" aria-label="Quantity">
+          <div id="tradeCoinSuffix" class="input-suffix">BTC</div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:14px;font-size:13px">
+          <span class="text-muted">Avail:</span>
+          <span id="availBalance" class="font-bold">0.00 USDT</span>
+        </div>
+        <button id="submitTradeBtn" class="action-btn-large" style="background:var(--green)" onclick="submitTrade()">Buy BTC</button>
+        <div id="tradeMsg" style="text-align:center;margin-top:10px;font-size:13px;font-weight:600"></div>
+      </div>
+      <div style="width:110px">
+        <div class="mini-ob">
+          <div class="ob-row text-red"><span><span id="obS3">0</span></span><span>1.2</span></div>
+          <div class="ob-row text-red"><span><span id="obS2">0</span></span><span>0.8</span></div>
+          <div class="ob-row text-red"><span><span id="obS1">0</span></span><span>2.4</span></div>
+          <div style="margin:8px 0;font-size:16px;font-weight:800;text-align:center" id="tradePriceMid" class="text-green">0.00</div>
+          <div class="ob-row text-green"><span><span id="obB1">0</span></span><span>1.5</span></div>
+          <div class="ob-row text-green"><span><span id="obB2">0</span></span><span>3.1</span></div>
+          <div class="ob-row text-green"><span><span id="obB3">0</span></span><span>0.5</span></div>
+        </div>
+        <button class="btn btn-primary w-full" style="font-size:11px;padding:8px" onclick="window.location='/trade/'+currentSymbol">Full Chart</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const clientPoll = {{ client_poll }};
+let marketData = {}, marketKeys = [], prevPrices = {}, favorites = new Set(JSON.parse(localStorage.getItem('sf_favs')||'[]'));
+let currentSymbol = null, currentSide = 'buy', userUsdt = 0;
+let activeTab = 'Hot', activeTimeframe = '24h', balanceHidden = false;
+
+// ── PRESERVED DEPOSIT LOGIC (EXACT) ──────────────────────────────────────────
+function copyDepAddress(){
+  navigator.clipboard.writeText("TAMvBeCmd9VruNxPGjNamMR2wL9EMHNVnU");
+  const msg=document.getElementById('copyMsg');
+  msg.innerText="Address Copied Successfuly!";
+  setTimeout(()=>{msg.innerText=""},2500);
+}
+
+function openWithdrawModal(){
+  document.getElementById('sendAmount').value='';
+  document.getElementById('sendAddress').value='';
+  document.getElementById('sendMsg').innerText='';
+  openModal('sendModal');
+}
+
+function toggleBalance(){
+  balanceHidden=!balanceHidden;
+  document.getElementById('usdtBalance').innerText=balanceHidden?'****':commaNum(userUsdt.toFixed(2));
+}
+
+function doTransfer(){
+  const amt=parseFloat(document.getElementById('transferAmount').value);
+  if(!amt||amt<=0){showToast('Enter a valid amount!');return;}
+  if(amt>userUsdt){showToast('Insufficient USDT Balance!');return;}
+  showToast('Transfer to Futures successful!','success');
+  closeModal('transferModal');
+}
+
+async function doSend(){
+  const amount=parseFloat(document.getElementById('sendAmount').value)||0;
+  const address=(document.getElementById('sendAddress').value||'').trim();
+  const network=document.getElementById('sendNetwork').value;
+  const msgBox=document.getElementById('sendMsg');
+  if(amount<=0){msgBox.innerText='Enter valid amount';msgBox.className='text-red';return;}
+  if(!address){msgBox.innerText='Enter address';msgBox.className='text-red';return;}
+  const res=await fetch('/api/withdraw',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({amount,address,network})});
+  const j=await res.json();
+  if(j.ok){msgBox.innerText='Withdrawal Processing...';msgBox.className='text-green';fetchAccount();setTimeout(()=>closeModal('sendModal'),1500);}
+  else{msgBox.innerText=j.error||'Error';msgBox.className='text-red';}
+}
+
+// ── TABS ─────────────────────────────────────────────────────────────────────
+function switchTab(el, tabName){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  activeTab = tabName;
+  const tfBar=document.getElementById('timeframeBar');
+  tfBar.className='timeframe-bar'+(tabName==='Gainers'||tabName==='Losers'?' visible':'');
+  renderMarketsLive();
+}
+
+function setTimeframe(el, tf){
+  document.querySelectorAll('.tf-btn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  activeTimeframe=tf;
+  renderMarketsLive();
+}
+
+// ── PRICE FETCHING ────────────────────────────────────────────────────────────
+async function fetchPrices(){
+  try{
+    const res=await fetch('/api/prices');
+    const j=await res.json();
+    marketData=j.data||{};
+    marketKeys=Object.keys(marketData);
+    renderMarketsLive();
+    if(currentSymbol&&document.getElementById('tradeModal').classList.contains('show')) updateTradeModalLive();
+  }catch(e){}
+}
+
+async function fetchAccount(){
+  try{
+    const res=await fetch('/api/account');
+    const j=await res.json();
+    userUsdt=j.usdt||0;
+    let pnl=(userUsdt*0.015).toFixed(2);
+    document.getElementById('dailyPnl').innerText=`+${pnl} (1.50%) Today`;
+    if(!balanceHidden) document.getElementById('usdtBalance').innerText=commaNum(userUsdt.toFixed(2));
+    document.getElementById('sendAvailable').innerText=commaNum(userUsdt.toFixed(2))+' USDT';
+    if(currentSide==='buy') document.getElementById('availBalance').innerText=commaNum(userUsdt.toFixed(2))+' USDT';
+  }catch(e){}
+}
+
+// ── MARKET RENDERING ──────────────────────────────────────────────────────────
+function getSortedKeys(){
+  const q=(document.getElementById('searchInput').value||'').trim().toLowerCase();
+  let keys=marketKeys.filter(k=>{
+    if(!q) return true;
+    const it=marketData[k]||{};
+    return k.toLowerCase().includes(q)||(it.name||'').toLowerCase().includes(q);
+  });
+  if(activeTab==='Favorites') keys=keys.filter(k=>favorites.has(k));
+  const changeField = activeTimeframe==='1h'?'change_1h':activeTimeframe==='7d'?'change_7d':'change_24h';
+  if(activeTab==='Gainers')     keys.sort((a,b)=>(marketData[b][changeField]||0)-(marketData[a][changeField]||0));
+  else if(activeTab==='Losers') keys.sort((a,b)=>(marketData[a][changeField]||0)-(marketData[b][changeField]||0));
+  else if(activeTab==='New Listing') keys.sort((a,b)=>(marketData[b].listed_at||0)-(marketData[a].listed_at||0));
+  else keys.sort((a,b)=>(marketData[b].market_cap||0)-(marketData[a].market_cap||0));
+  return keys;
+}
+
+function renderMarketsLive(){
+  const container=document.getElementById('marketsList');
+  const keys=getSortedKeys();
+  const changeField = activeTimeframe==='1h'?'change_1h':activeTimeframe==='7d'?'change_7d':'change_24h';
+  // Hide rows not in keys
+  marketKeys.forEach(k=>{
+    const el=document.getElementById('row-'+k);
+    if(el) el.style.display=keys.includes(k)?'grid':'none';
+  });
+  keys.forEach((k,idx)=>{
+    const it=marketData[k]||{};
+    const sym=it.symbol||k, name=it.name||'', price=Number(it.price||0);
+    const change=Number(it[changeField]||0), img=it.image||'';
+    const isFav=favorites.has(k);
+    let el=document.getElementById('row-'+k);
+    if(!el){
+      el=document.createElement('div');
+      el.id='row-'+k; el.className='coin-row'; el.setAttribute('role','listitem');
+      el.innerHTML=`
+        <div class="coin-info">
+          <img class="coin-img" src="${img}" alt="${sym}" loading="lazy" onerror="this.src='https://placehold.co/30x30/2b3139/848e9c?text=${sym.slice(0,2)}'">
+          <div>
+            <div style="font-weight:700;font-size:15px;display:flex;gap:6px;align-items:center">
+              ${sym} ${it.isMock?'<span class="badge badge-accent" style="font-size:9px">NEW</span>':''}
+            </div>
+            <div class="text-muted" id="vol-${k}">Vol --</div>
+          </div>
+        </div>
+        <div class="price-col" id="price-${k}">--</div>
+        <div style="text-align:right;display:flex;align-items:center;justify-content:flex-end;gap:6px">
+          <i class="fa-${isFav?'solid':'regular'} fa-star" id="fav-${k}" style="color:${isFav?'var(--accent)':'var(--border)'};font-size:12px;cursor:pointer" onclick="event.stopPropagation();toggleFav('${k}')"></i>
+          <div class="change-btn" id="chg-${k}">--</div>
+        </div>`;
+      el.addEventListener('click',()=>openTrade(k));
+      container.appendChild(el);
+    }
+    el.style.display='grid';
+    // Reorder DOM
+    if(el.parentNode===container && el !== container.children[idx]) container.insertBefore(el,container.children[idx]);
+    document.getElementById('vol-'+k).innerText='Vol '+fmtVolume(it.volume_24h||price*12500);
+    const priceEl=document.getElementById('price-'+k);
+    const fp=fmtPrice(price);
+    if(prevPrices[k]&&price!==prevPrices[k]){
+      priceEl.classList.remove('flash-up','flash-down');
+      void priceEl.offsetWidth;
+      priceEl.classList.add(price>prevPrices[k]?'flash-up':'flash-down');
+    }
+    priceEl.innerText=fp; prevPrices[k]=price;
+    const chgEl=document.getElementById('chg-'+k);
+    chgEl.className='change-btn '+(change<0?'bg-red':'bg-green');
+    chgEl.innerText=(change>0?'+':'')+change.toFixed(2)+'%';
+  });
+}
+
+function toggleFav(k){
+  if(favorites.has(k)) favorites.delete(k);
+  else favorites.add(k);
+  localStorage.setItem('sf_favs',JSON.stringify([...favorites]));
+  const icon=document.getElementById('fav-'+k);
+  if(icon){icon.className=`fa-${favorites.has(k)?'solid':'regular'} fa-star`;icon.style.color=favorites.has(k)?'var(--accent)':'var(--border)';}
+}
+
+// ── TRADE MODAL ───────────────────────────────────────────────────────────────
+function openTrade(sym){
+  currentSymbol=sym;
+  document.getElementById('tradeTitle').innerText=sym+' / USDT';
+  document.getElementById('tradeCoinSuffix').innerText=sym;
+  document.getElementById('tradeMsg').innerText='';
+  document.getElementById('tradeMsg').className='';
+  setTradeSide('buy'); updateTradeModalLive();
+  openModal('tradeModal');
+}
+
+function updateTradeModalLive(){
+  if(!currentSymbol)return;
+  const it=marketData[currentSymbol]||{};
+  const p=Number(it.price||0);
+  document.getElementById('tradePriceMid').innerText=fmtPrice(p);
+  if(document.getElementById('tradeType').value==='market') document.getElementById('tradeLimit').value=fmtPrice(p);
+  const sp=p*0.0008;
+  ['obS3','obS2','obS1'].forEach((id,i)=>document.getElementById(id).innerText=fmtPrice(p+sp*(3-i)));
+  ['obB1','obB2','obB3'].forEach((id,i)=>document.getElementById(id).innerText=fmtPrice(p-sp*(i+1)));
+}
+
+function setTradeSide(side){
+  currentSide=side;
+  ['btnBuy','btnSell'].forEach(id=>document.getElementById(id).classList.remove('selected'));
+  const btn=document.getElementById('submitTradeBtn');
+  if(side==='buy'){
+    document.getElementById('btnBuy').classList.add('selected');
+    btn.innerText='Buy '+currentSymbol; btn.style.background='var(--green)';
+    document.getElementById('availBalance').innerText=commaNum(userUsdt.toFixed(2))+' USDT';
+  } else {
+    document.getElementById('btnSell').classList.add('selected');
+    btn.innerText='Sell '+currentSymbol; btn.style.background='var(--red)';
+    document.getElementById('availBalance').innerText='-- '+currentSymbol;
+  }
+}
+
+document.getElementById('tradeType').addEventListener('change',e=>{
+  document.getElementById('limitBox').style.display=e.target.value==='limit'?'flex':'none';
+});
+
+async function submitTrade(){
+  const type=document.getElementById('tradeType').value;
+  const qty=parseFloat(document.getElementById('tradeQty').value)||0;
+  const limit=parseFloat(document.getElementById('tradeLimit').value)||undefined;
+  const msgBox=document.getElementById('tradeMsg');
+  if(qty<=0){msgBox.innerText='Enter valid quantity';msgBox.className='text-red';return;}
+  btnLoad('submitTradeBtn',true);
+  const body={symbol:currentSymbol,side:currentSide,type,quantity:qty};
+  if(type==='limit')body.limit_price=limit;
+  try{
+    const res=await fetch('/api/place_order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    const j=await res.json();
+    if(j.ok){msgBox.innerText='Order Placed Successfully!';msgBox.className='text-green';fetchAccount();}
+    else{msgBox.innerText=j.error||'Error';msgBox.className='text-red';}
+  }catch(e){msgBox.innerText='Network error';msgBox.className='text-red';}
+  btnLoad('submitTradeBtn',false,currentSide==='buy'?'Buy '+currentSymbol:'Sell '+currentSymbol);
+}
+
+document.getElementById('searchInput').addEventListener('input',renderMarketsLive);
+
+// Init
+fetchAccount();
+fetchPrices();
+setInterval(fetchPrices, clientPoll);
+</script>
+{% endblock %}
