@@ -906,7 +906,5 @@ def api_buy_crypto_execute():
 # Entry point
 # ═══════════════════════════════════════════════════════════════════════════════
 if __name__ == "__main__":
-    fetch_prices_once()
-    _seed_p2p()
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=False)
+    app.run(host="0.0.0.0", port=port)
