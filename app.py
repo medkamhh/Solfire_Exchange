@@ -905,30 +905,6 @@ def api_buy_crypto_execute():
 # ═══════════════════════════════════════════════════════════════════════════════
 # Entry point
 # ═══════════════════════════════════════════════════════════════════════════════
-@app.route('/')
-def index():
-    return render_template('home.html')
-
-@app.route('/login')
-def login():
-    return render_template('login.html')
-
-@app.route('/buy')
-def buy():
-    return render_template('buy.html')
-
-@app.route('/earn')
-def earn():
-    return render_template('earn.html')
-
-@app.route('/p2p')
-def p2p():
-    return render_template('p2p.html')
-
-@app.route('/more')
-def more():
-    return render_template('more.html')
-
 if __name__ == "__main__":
     fetch_prices_once()
     _seed_p2p()
