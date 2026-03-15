@@ -111,11 +111,11 @@ def fetch_prices_once():
         resp = requests.get(url, params=params, timeout=10)
         resp.raise_for_status()
         arr = resp.json()
-        new = INITIAL_MARKET.copy() # keep fake coins
+        new = INITIAL_MARKET.copy() 
         
         for item in arr:
             sym = (item.get("symbol") or "").upper()
-            if sym in ["SLFR", "MOON", "GEMS", "RICH", "NINJA"]: continue # skip overriding fake coins
+            if sym in ["SLFR", "MOON", "GEMS", "RICH", "NINJA"]: continue 
             name = item.get("name") or ""
             cid = item.get("id") or ""
             price = item.get("current_price")
@@ -128,27 +128,23 @@ def fetch_prices_once():
         market_cache["data"] = new
         market_cache["last_update"] = int(time.time())
     except Exception as e:
-        # Fails silently and keeps using the highly realistic hardcoded + jittered data
         pass
 
 # ---------- Live Simulation Engine (Micro Jitters) ----------
-# This function creates the realistic "1-second" tick without hitting API limits
 def micro_jitter_worker():
     while True:
         data = market_cache.get("data", {})
         for k, v in data.items():
             if v.get("price"):
-                # Randomly move price by -0.15% to +0.15% for strong visual effect
                 jitter = random.uniform(-0.0015, 0.0015)
                 v["price"] = max(1e-8, v["price"] * (1 + jitter))
             
             if v.get("change_24h") is not None:
-                # Randomly move the 24h change slightly
                 c_jitter = random.uniform(-0.05, 0.05)
                 v["change_24h"] = v["change_24h"] + c_jitter
 
         try_match_limits()
-        time.sleep(1.5) # Update prices every 1.5 seconds locally
+        time.sleep(1.5) 
 
 def background_api_worker():
     while True:
@@ -298,640 +294,550 @@ def api_place_order():
         global_orderbook["limit_orders"].append(order)
         return jsonify({"ok": True, "placed": order})
 
-@app.route("/api/withdraw", methods=["POST"])
-@login_required
-def api_withdraw():
-    sid = current_session_id()
-    store = ensure_user_store()
-    payload = request.get_json() or request.form
-    try: amt = float(payload.get("amount") or 0.0)
-    except: return jsonify({"ok": False, "error": "invalid amount"}), 400
-    addr = (payload.get("address") or "").strip()
-    network = (payload.get("network") or NETWORK_LABEL).strip()
-    if amt <= 0: return jsonify({"ok": False, "error": "amount must be > 0"}), 400
-    if not addr: return jsonify({"ok": False, "error": "address required"}), 400
-    if store["balances"].get("USDT", 0.0) + 1e-9 < amt: return jsonify({"ok": False, "error": "insufficient USDT"}), 400
-    store["balances"]["USDT"] -= amt
-    tx = {"id": str(uuid.uuid4()), "to": addr, "network": network, "amount": amt, "status": "Processing", "timestamp": int(time.time())}
-    store["transfers"].append(tx)
-    return jsonify({"ok": True, "tx": tx, "new_balance": store["balances"]["USDT"]})
-
 @app.route("/")
 @login_required
 def home():
     user = session.get("user", {"name":"User","email":""})
     html = """
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=0">
-<title>Solfire Pro - Exchange</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-<style>
-:root{--bg:#0b0e11;--card:#181a20;--card-hover:#2b3139;--text:#eaecef;--muted:#848e9c;--accent:#fcd535;--green:#0ecb81;--red:#f6465c;--border:#2b3139;}
-body{margin:0;font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);padding-bottom:70px;user-select:none; -webkit-tap-highlight-color: transparent;}
-* {box-sizing: border-box;}
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=0">
+    <title>Solfire Pro - Exchange</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --bg: #0b0e11;
+            --card: #181a20;
+            --card-hover: #2b3139;
+            --text: #eaecef;
+            --muted: #848e9c;
+            --accent: #fcd535;
+            --green: #0ecb81;
+            --red: #f6465c;
+            --border: #2b3139;
+        }
+        body { margin: 0; font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); padding-bottom: 70px; user-select: none; -webkit-tap-highlight-color: transparent; overflow-x: hidden; }
+        * { box-sizing: border-box; }
+        
+        /* Utilities */
+        .text-green { color: var(--green) !important; }
+        .text-red { color: var(--red) !important; }
+        .text-muted { color: var(--muted) !important; }
+        .flex { display: flex; }
+        .items-center { align-items: center; }
+        .justify-between { justify-content: space-between; }
+        .font-bold { font-weight: 700; }
+        .font-semibold { font-weight: 600; }
+        .w-full { width: 100%; }
+        
+        /* Header */
+        .app-header { padding: 16px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); }
+        .logo-area { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 20px; color: var(--accent); }
+        .header-icons { display: flex; gap: 16px; font-size: 18px; color: var(--text); }
+        
+        /* Balance Card */
+        .balance-section { padding: 20px 16px; border-bottom: 8px solid var(--card); }
+        .balance-title { color: var(--muted); font-size: 14px; margin-bottom: 8px; }
+        .balance-amount { font-size: 32px; font-weight: 700; margin-bottom: 4px; }
+        .balance-sub { font-size: 14px; }
+        
+        .action-buttons { display: flex; gap: 12px; margin-top: 20px; }
+        .btn-action { flex: 1; padding: 12px 0; border-radius: 8px; font-weight: 600; font-size: 14px; text-align: center; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+        .btn-action i { font-size: 18px; }
+        .btn-deposit { background: var(--accent); color: #000; }
+        .btn-secondary { background: var(--card-hover); color: var(--text); }
+        
+        /* Grid Menu */
+        .grid-menu { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px 8px; padding: 20px 16px; border-bottom: 8px solid var(--card); }
+        .grid-item { display: flex; flex-direction: column; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); cursor: pointer; }
+        .grid-icon { width: 40px; height: 40px; border-radius: 12px; background: var(--card-hover); display: flex; align-items: center; justify-content: center; font-size: 18px; color: var(--accent); transition: 0.2s; }
+        .grid-item:hover .grid-icon { background: var(--border); }
+        
+        /* Markets List */
+        .market-tabs { display: flex; gap: 20px; padding: 16px; border-bottom: 1px solid var(--border); overflow-x: auto; white-space: nowrap; }
+        .market-tab { color: var(--muted); font-size: 15px; font-weight: 600; cursor: pointer; padding-bottom: 8px; }
+        .market-tab.active { color: var(--text); border-bottom: 2px solid var(--accent); }
+        .market-list { padding: 0 16px; }
+        .market-header { display: flex; justify-content: space-between; padding: 12px 0; color: var(--muted); font-size: 12px; }
+        
+        .coin-row { display: flex; align-items: center; justify-content: space-between; padding: 16px 0; border-bottom: 1px solid var(--card); }
+        .coin-info { display: flex; align-items: center; gap: 12px; width: 40%; }
+        .coin-img { width: 32px; height: 32px; border-radius: 50%; }
+        .coin-name { font-weight: 600; font-size: 16px; display: flex; align-items: baseline; gap: 4px;}
+        .coin-vol { font-size: 12px; color: var(--muted); }
+        .coin-price { width: 30%; text-align: right; font-weight: 600; font-size: 16px; }
+        .coin-change { width: 30%; display: flex; justify-content: flex-end; }
+        .change-badge { padding: 6px 12px; border-radius: 4px; font-weight: 600; font-size: 14px; min-width: 75px; text-align: center; }
+        .bg-green { background: rgba(14, 203, 129, 0.15); color: var(--green); }
+        .bg-red { background: rgba(246, 70, 92, 0.15); color: var(--red); }
+        
+        /* Bottom Nav */
+        .bottom-nav { position: fixed; bottom: 0; left: 0; width: 100%; height: 65px; background: var(--card); border-top: 1px solid var(--border); display: flex; justify-content: space-around; align-items: center; z-index: 50; }
+        .nav-item { display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--muted); font-size: 11px; font-weight: 600; cursor: pointer; }
+        .nav-item i { font-size: 20px; }
+        .nav-item.active { color: var(--accent); }
+        
+        /* ======= FULL SCREEN MODALS (The Magic) ======= */
+        .full-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: var(--bg); z-index: 1000; display: none; flex-direction: column; overflow-y: auto; transform: translateX(100%); transition: transform 0.3s ease; }
+        .full-modal.active { display: flex; transform: translateX(0); }
+        .modal-header { padding: 16px; display: flex; align-items: center; gap: 16px; border-bottom: 1px solid var(--border); background: var(--bg); position: sticky; top: 0; z-index: 10; }
+        .back-btn { font-size: 20px; color: var(--text); cursor: pointer; padding: 4px; }
+        .modal-title { font-size: 18px; font-weight: 700; flex: 1; }
+        .modal-content { padding: 16px; flex: 1; }
 
-/* Utilities */
-.text-green { color: var(--green) !important; }
-.text-red { color: var(--red) !important; }
-.bg-green { background: rgba(14,203,129,0.1); color: var(--green); }
-.bg-red { background: rgba(246,70,92,0.1); color: var(--red); }
-.flex { display: flex; }
-.items-center { align-items: center; }
-.justify-between { justify-content: space-between; }
-.text-muted { color: var(--muted); font-size: 13px; }
-.font-bold { font-weight: 700; }
+        /* P2P Styles */
+        .p2p-tabs { display: flex; background: var(--card); border-radius: 8px; margin-bottom: 16px; padding: 4px; }
+        .p2p-tab { flex: 1; text-align: center; padding: 8px; border-radius: 6px; font-weight: 600; cursor: pointer; color: var(--muted); }
+        .p2p-tab.active.buy { background: var(--green); color: white; }
+        .p2p-tab.active.sell { background: var(--red); color: white; }
+        .p2p-filters { display: flex; gap: 10px; margin-bottom: 16px; overflow-x: auto; }
+        .p2p-filter-btn { padding: 6px 12px; background: var(--card); border-radius: 16px; font-size: 13px; color: var(--text); white-space: nowrap; border: 1px solid var(--border); }
+        .p2p-merchant { background: var(--card); border-radius: 12px; padding: 16px; margin-bottom: 12px; }
+        .merchant-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .merchant-name { font-weight: 600; display: flex; align-items: center; gap: 8px; }
+        .merchant-badge { width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: black; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: bold; }
+        .merchant-stats { font-size: 12px; color: var(--muted); }
+        .merchant-price { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+        .merchant-limits { font-size: 12px; color: var(--muted); margin-bottom: 12px; line-height: 1.6; }
+        .btn-p2p-buy { background: var(--green); color: white; padding: 8px 16px; border-radius: 6px; font-weight: 600; border: none; cursor: pointer; width: 100px; text-align: center; }
+        
+        /* Buy Crypto Styles */
+        .buy-box { background: var(--card); border-radius: 16px; padding: 20px; margin-top: 20px; }
+        .input-group { border: 1px solid var(--border); border-radius: 12px; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; background: var(--bg); }
+        .input-group input { background: transparent; border: none; color: var(--text); font-size: 24px; font-weight: 700; width: 60%; outline: none; }
+        .coin-selector { display: flex; align-items: center; gap: 8px; font-weight: 600; background: var(--card-hover); padding: 6px 12px; border-radius: 20px; }
+        .buy-huge-btn { background: var(--accent); color: #000; width: 100%; padding: 16px; border-radius: 12px; font-size: 18px; font-weight: 800; border: none; cursor: pointer; margin-top: 10px; }
+        
+        /* Earn Styles */
+        .earn-hero { background: linear-gradient(135deg, #181a20 0%, #2b3139 100%); padding: 30px 20px; border-radius: 16px; margin-bottom: 20px; text-align: center; border: 1px solid var(--border); }
+        .earn-item { display: flex; align-items: center; justify-content: space-between; padding: 16px; background: var(--card); border-radius: 12px; margin-bottom: 12px; }
+        .earn-apr { color: var(--green); font-weight: 700; font-size: 18px; }
+        .btn-subscribe { background: var(--accent); border: none; padding: 8px 16px; border-radius: 6px; font-weight: 600; cursor: pointer; color: black; }
+        
+        /* More Styles */
+        .more-section { margin-bottom: 24px; }
+        .more-section-title { font-size: 16px; font-weight: 700; margin-bottom: 16px; padding-left: 8px; border-left: 3px solid var(--accent); }
+        .more-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px 8px; }
+        .more-item { display: flex; flex-direction: column; align-items: center; gap: 8px; font-size: 12px; color: var(--text); cursor: pointer; text-align: center; }
+        .more-icon { width: 44px; height: 44px; border-radius: 12px; background: var(--card); display: flex; align-items: center; justify-content: center; font-size: 20px; color: var(--accent); }
+        
+        /* Toasts */
+        #toast-container { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 9999; display: flex; flex-direction: column; gap: 10px; }
+        .toast { background: var(--card-hover); color: white; padding: 12px 24px; border-radius: 8px; font-weight: 600; box-shadow: 0 4px 12px rgba(0,0,0,0.5); border-left: 4px solid var(--accent); animation: fadeInDown 0.3s forwards; }
+        @keyframes fadeInDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+        
+    </style>
+</head>
+<body>
 
-/* Navbar */
-.navbar { padding: 16px; display: flex; justify-content: space-between; align-items: center; background: var(--bg); position: sticky; top: 0; z-index: 10; border-bottom: 1px solid var(--border); }
-.brand { font-weight: 800; color: var(--accent); font-size: 20px; display:flex; align-items:center; gap:8px;}
-.nav-icons { display: flex; gap: 16px; font-size: 18px; color: var(--text); }
-.nav-icons i { cursor:pointer; }
-
-/* Hero Balance */
-.hero { padding: 20px 16px; background: linear-gradient(180deg, var(--card) 0%, var(--bg) 100%); }
-.balance-title { font-size: 14px; color: var(--muted); margin-bottom: 4px; display:flex; justify-content:space-between}
-.balance-val { font-size: 32px; font-weight: 800; margin-bottom: 4px; display:flex; align-items:baseline; gap:6px;}
-.pnl { font-size: 14px; margin-bottom: 16px; font-weight:600; }
-.action-buttons { display: flex; gap: 10px; }
-.btn-action { flex: 1; background: var(--card-hover); border: none; padding: 12px 0; border-radius: 8px; color: var(--text); font-weight: 600; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 13px; transition: 0.2s;}
-.btn-action i { font-size: 18px; }
-.btn-action.primary { background: var(--accent); color: var(--bg); }
-.btn-action:active { transform: scale(0.96); }
-
-/* Quick Actions Grid */
-.quick-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding: 0 16px 16px; text-align: center; font-size: 12px; font-weight: 500;}
-.q-item { display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--muted); cursor:pointer;}
-.q-icon { width: 40px; height: 40px; background: var(--card); border-radius: 12px; display: flex; justify-content: center; align-items: center; font-size: 18px; color: var(--accent); transition:0.2s;}
-.q-item:active .q-icon { background: var(--card-hover); }
-
-/* Markets List */
-.markets-container { padding: 0 16px; }
-.tabs { display: flex; gap: 20px; border-bottom: 1px solid var(--border); margin-bottom: 12px; overflow-x: auto; white-space: nowrap;}
-.tab { padding-bottom: 10px; color: var(--muted); font-weight: 600; cursor: pointer; font-size: 14px; transition:0.2s;}
-.tab.active { color: var(--text); border-bottom: 2px solid var(--accent); }
-
-.search-box { display: flex; align-items: center; background: var(--card); border-radius: 8px; padding: 8px 12px; margin-bottom: 16px; }
-.search-box input { background: transparent; border: none; color: var(--text); width: 100%; outline: none; margin-left: 8px; font-family:'Inter'; font-size:14px; }
-
-.market-header { display: grid; grid-template-columns: 2fr 1fr 1fr; padding: 8px 0; font-size: 12px; color: var(--muted); font-weight:600;}
-.market-header div:nth-child(2) { text-align: right; }
-.market-header div:nth-child(3) { text-align: right; }
-
-.coin-row { display: grid; grid-template-columns: 2fr 1fr 1fr; padding: 14px 0; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.03); cursor: pointer; transition: background 0.2s; }
-.coin-row:active { background: var(--card); }
-.coin-info { display: flex; align-items: center; gap: 12px; }
-.coin-img { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; background:#fff;}
-.price-col { text-align: right; font-weight: 600; font-size: 15px; transition: color 0.3s ease; }
-.change-btn { justify-self: end; padding: 6px 10px; border-radius: 4px; font-size: 13px; font-weight: 600; width: 75px; text-align: center; }
-
-/* Flashing animations for real-time vibe */
-@keyframes flashGreen { 0% { color: var(--green); } 100% { color: var(--text); } }
-@keyframes flashRed { 0% { color: var(--red); } 100% { color: var(--text); } }
-.flash-up { animation: flashGreen 0.8s ease-out; }
-.flash-down { animation: flashRed 0.8s ease-out; }
-
-/* Bottom Nav */
-.bottom-nav { position: fixed; bottom: 0; width: 100%; background: var(--card); display: flex; justify-content: space-around; padding: 12px 0; border-top: 1px solid var(--border); z-index: 50; }
-.nav-item { display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--muted); font-size: 11px; cursor: pointer; transition:0.2s; }
-.nav-item.active { color: var(--accent); font-weight:600;}
-.nav-item i { font-size: 20px; }
-
-/* Modals */
-.modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 100; display: none; justify-content: center; align-items: flex-end; backdrop-filter: blur(2px); }
-.modal-overlay.show { display: flex; }
-.modal-content { background: var(--card); width: 100%; max-width: 500px; border-radius: 20px 20px 0 0; padding: 24px; animation: slideUp 0.3s ease-out; max-height: 90vh; overflow-y:auto;}
-@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
-
-.m-title { font-size: 18px; font-weight: 700; margin-bottom: 20px; display: flex; justify-content: space-between; }
-.m-title i { color: var(--muted); cursor: pointer; font-size:20px;}
-
-/* Trade UI specific */
-.trade-tabs { display:flex; gap:10px; margin-bottom:16px;}
-.trade-btn { flex:1; padding:10px; text-align:center; border-radius:8px; font-weight:700; cursor:pointer; background:var(--bg); border:1px solid var(--border);}
-.trade-btn.buy.selected { background:var(--green); color:#fff; border-color:var(--green);}
-.trade-btn.sell.selected { background:var(--red); color:#fff; border-color:var(--red);}
-
-.input-group { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; display: flex; align-items: center; padding: 0 12px; margin-bottom: 16px; }
-.input-group input { flex: 1; border: none; background: transparent; padding: 14px 0; color: var(--text); font-size: 16px; font-weight: 600; outline:none;}
-.input-label { color: var(--muted); font-size: 14px; margin-right: 8px; width:50px;}
-.input-suffix { color: var(--text); font-weight: 600; font-size:14px;}
-
-.action-btn-large { width: 100%; padding: 16px; border-radius: 8px; font-weight: 700; font-size: 16px; border: none; cursor: pointer; margin-top: 10px; color:#fff;}
-
-/* Mini orderbook */
-.mini-ob { font-family: monospace; font-size:12px; margin-bottom:16px;}
-.ob-row { display:flex; justify-content:space-between; margin-bottom:4px;}
-
-/* Toast Notification */
-#toast {
-    position: fixed; top: 80px; left: 50%; transform: translateX(-50%);
-    background: var(--card-hover); color: var(--text); padding: 12px 24px;
-    border-radius: 30px; font-size: 14px; font-weight: 600; z-index: 999;
-    display: none; border: 1px solid var(--border);
-    box-shadow: 0 8px 16px rgba(0,0,0,0.5);
-    animation: fadeInOut 2.5s ease-in-out forwards;
-}
-@keyframes fadeInOut {
-    0% { opacity: 0; transform: translate(-50%, -20px); }
-    15% { opacity: 1; transform: translate(-50%, 0); }
-    85% { opacity: 1; transform: translate(-50%, 0); }
-    100% { opacity: 0; transform: translate(-50%, -20px); }
-}
-</style>
-</head><body>
-
-  <div id="toast">Message</div>
-
-  <div class="navbar">
-    <div class="brand"><i class="fa-solid fa-fire"></i> SOLFIRE</div>
-    <div class="nav-icons">
-      <i class="fa-solid fa-magnifying-glass" onclick="showToast('Opening Search...')"></i>
-      <i class="fa-solid fa-qrcode" onclick="showToast('QR Scanner Starting...')"></i>
-      <i class="fa-regular fa-bell" onclick="showToast('No new notifications')"></i>
-    </div>
-  </div>
-
-  <div class="hero">
-    <div class="balance-title"><span>Total Balance</span> <i class="fa-regular fa-eye" onclick="showToast('Balance visibility toggled')"></i></div>
-    <div class="balance-val"><span id="usdtBalance">0.00</span> <span style="font-size:16px;font-weight:600">USDT</span></div>
-    <div class="pnl text-green" id="dailyPnl">+0.00 (0.00%) Today</div>
-    
-    <div class="action-buttons">
-      <button class="btn-action primary" onclick="openDepositModal()"><i class="fa-solid fa-wallet"></i> Deposit</button>
-      <button class="btn-action" onclick="openSendModal()"><i class="fa-solid fa-paper-plane"></i> Withdraw</button>
-      <button class="btn-action" onclick="openTransferModal()"><i class="fa-solid fa-right-left"></i> Transfer</button>
-    </div>
-  </div>
-
-  <div class="quick-grid">
-    <div class="q-item" onclick="showToast('P2P Trading is loading...')"><div class="q-icon"><i class="fa-solid fa-users"></i></div>P2P Trading</div>
-    <div class="q-item" onclick="showToast('Buy Crypto gateway opening...')"><div class="q-icon"><i class="fa-solid fa-credit-card"></i></div>Buy Crypto</div>
-    <div class="q-item" onclick="showToast('Earn: Staking currently locked')"><div class="q-icon"><i class="fa-solid fa-piggy-bank"></i></div>Earn</div>
-    <div class="q-item" onclick="showToast('More features coming soon!')"><div class="q-icon" style="color:var(--text)"><i class="fa-solid fa-ellipsis"></i></div>More</div>
-  </div>
-
-  <div style="height:8px; background:var(--card);"></div> 
-  <div class="markets-container" style="padding-top:16px;">
-    <div class="tabs">
-      <div class="tab" onclick="switchTab(this, 'Favorites')"><i class="fa-solid fa-star" style="font-size:12px;"></i> Favorites</div>
-      <div class="tab active" onclick="switchTab(this, 'Hot')">Hot</div>
-      <div class="tab" onclick="switchTab(this, 'Gainers')">Gainers</div>
-      <div class="tab" onclick="switchTab(this, 'Losers')">Losers</div>
-      <div class="tab" onclick="switchTab(this, 'New Listing')">New Listing</div>
-    </div>
-
-    <div class="search-box">
-      <i class="fa-solid fa-search text-muted"></i>
-      <input type="text" id="searchInput" placeholder="Search Coin Pairs">
-    </div>
-
-    <div class="market-header">
-      <div>Name / Vol</div>
-      <div>Last Price</div>
-      <div>24h Chg%</div>
-    </div>
-
-    <div id="marketsList">
-      </div>
-  </div>
-
-  <div class="bottom-nav">
-    <div class="nav-item active" onclick="switchNav(this, 'Home')"><i class="fa-solid fa-house"></i> Home</div>
-    <div class="nav-item" onclick="switchNav(this, 'Markets')"><i class="fa-solid fa-chart-simple"></i> Markets</div>
-    <div class="nav-item" onclick="switchNav(this, 'Trade', true)"><i class="fa-solid fa-money-bill-transfer"></i> Trade</div>
-    <div class="nav-item" onclick="switchNav(this, 'Futures')"><i class="fa-solid fa-bolt"></i> Futures</div>
-    <div class="nav-item" onclick="switchNav(this, 'Wallets')"><i class="fa-solid fa-wallet"></i> Wallets</div>
-  </div>
-
-  <div id="depositModal" class="modal-overlay">
-    <div class="modal-content">
-      <div class="m-title"><span>Deposit Crypto</span> <i class="fa-solid fa-xmark" onclick="closeModal('depositModal')"></i></div>
-      
-      <div style="background:var(--bg); padding:20px; border-radius:12px; margin-bottom:16px;">
-          <div class="text-muted" style="margin-bottom:12px; font-weight:600; font-size:14px;">your wallet address :</div>
-          <div style="display:flex; justify-content:space-between; align-items:center; background:var(--card); padding:16px; border-radius:8px; border:1px solid var(--border);">
-              <span id="depAddress" style="font-family:monospace; font-size:14px; word-break:break-all; color:var(--text); font-weight:700;">TAMvBeCmd9VruNxPGjNamMR2wL9EMHNVnU</span>
-              <div onclick="copyDepAddress()" style="background:rgba(252, 213, 53, 0.1); padding:10px; border-radius:8px; cursor:pointer; margin-left:16px; transition:0.2s;">
-                  <i class="fa-regular fa-copy" style="color:var(--accent); font-size:20px;"></i>
-              </div>
-          </div>
-          <div class="text-muted" style="margin-top:20px; font-weight:600; font-size:14px;">The network : TRX ( TRC20 )</div>
-      </div>
-      <div id="copyMsg" class="text-green" style="text-align:center; font-size:14px; font-weight:700; height:20px;"></div>
-    </div>
-  </div>
-
-  <div id="transferModal" class="modal-overlay">
-    <div class="modal-content">
-      <div class="m-title"><span>Transfer</span> <i class="fa-solid fa-xmark" onclick="closeModal('transferModal')"></i></div>
-      <div class="input-group" style="padding:14px; margin-bottom:8px; background:var(--card-hover);">
-          <div class="text-muted" style="width:50px;">From</div>
-          <div style="font-weight:700;">Spot Wallet</div>
-      </div>
-      <div style="text-align:center; color:var(--accent); margin-bottom:8px;"><i class="fa-solid fa-arrow-down"></i></div>
-      <div class="input-group" style="padding:14px; background:var(--card-hover);">
-          <div class="text-muted" style="width:50px;">To</div>
-          <div style="font-weight:700;">Futures Wallet</div>
-      </div>
-      
-      <div class="input-group" style="margin-top:20px;">
-        <div class="input-label" style="width:60px;">Coin</div>
-        <input type="text" value="USDT" readonly style="font-weight:700;">
-      </div>
-
-      <div class="input-group">
-        <div class="input-label" style="width:60px;">Amount</div>
-        <input id="transferAmount" type="number" placeholder="Please enter amount">
-        <div class="input-suffix text-accent" style="color:var(--accent); cursor:pointer;" onclick="document.getElementById('transferAmount').value=userUsdt.toFixed(2)">MAX</div>
-      </div>
-      <button class="action-btn-large primary" style="background:var(--accent); color:var(--bg);" onclick="doTransfer()">Confirm Transfer</button>
-    </div>
-  </div>
-
-  <div id="sendModal" class="modal-overlay">
-    <div class="modal-content">
-      <div class="m-title"><span>Withdraw USDT</span> <i class="fa-solid fa-xmark" onclick="closeModal('sendModal')"></i></div>
-      
-      <div class="input-group">
-        <div class="input-label" style="width:60px;">Address</div>
-        <input id="sendAddress" type="text" placeholder="Long press to paste">
-        <i class="fa-solid fa-paste text-muted" onclick="showToast('Please allow clipboard access')"></i>
-      </div>
-
-      <div class="input-group" style="padding:0">
-        <select id="sendNetwork" style="width:100%; background:transparent; border:none; color:var(--text); padding:14px; outline:none; font-family:'Inter';font-weight:600;">
-          <option>Tron (TRC20)</option>
-          <option>Ethereum (ERC20)</option>
-          <option>BNB Smart Chain (BEP20)</option>
-        </select>
-      </div>
-
-      <div class="input-group">
-        <div class="input-label" style="width:60px;">Amount</div>
-        <input id="sendAmount" type="number" step="any" placeholder="Min 10">
-        <div class="input-suffix text-accent" style="color:var(--accent); cursor:pointer;" onclick="document.getElementById('sendAmount').value=userUsdt.toFixed(2)">MAX</div>
-      </div>
-
-      <div style="display:flex; justify-content:space-between; margin-bottom:24px; font-size:13px;">
-        <span class="text-muted">Available:</span>
-        <span id="sendAvailable" class="font-bold">0.00 USDT</span>
-      </div>
-
-      <button class="action-btn-large primary" style="background:var(--accent); color:var(--bg);" onclick="doSend()">Withdraw</button>
-      <div id="sendMsg" style="text-align:center; margin-top:10px; font-size:13px; font-weight:600;"></div>
-    </div>
-  </div>
-
-  <div id="tradeModal" class="modal-overlay">
-    <div class="modal-content">
-      <div class="m-title"><span id="tradeTitle">BTC / USDT</span> <i class="fa-solid fa-xmark" onclick="closeModal('tradeModal')"></i></div>
-      
-      <div style="display:flex; gap:20px;">
-        <div style="flex:1;">
-          <div class="trade-tabs">
-            <div id="btnBuy" class="trade-btn buy selected" onclick="setTradeSide('buy')">Buy</div>
-            <div id="btnSell" class="trade-btn sell" onclick="setTradeSide('sell')">Sell</div>
-          </div>
-
-          <div class="input-group" style="padding:0">
-            <select id="tradeType" style="width:100%; background:transparent; border:none; color:var(--text); padding:14px; outline:none; font-family:'Inter';font-weight:600;">
-              <option value="market">Market</option>
-              <option value="limit">Limit</option>
-            </select>
-          </div>
-
-          <div class="input-group" id="limitBox" style="display:none;">
-            <div class="input-label">Price</div>
-            <input id="tradeLimit" type="number" step="any">
-            <div class="input-suffix">USDT</div>
-          </div>
-
-          <div class="input-group">
-            <div class="input-label">Qty</div>
-            <input id="tradeQty" type="number" step="any" value="0.01">
-            <div id="tradeCoinSuffix" class="input-suffix">BTC</div>
-          </div>
-
-          <div style="display:flex; justify-content:space-between; margin-bottom:16px; font-size:13px;">
-            <span class="text-muted">Avail:</span>
-            <span id="availBalance" class="font-bold">0.00 USDT</span>
-          </div>
-
-          <button id="submitTradeBtn" class="action-btn-large" style="background:var(--green);" onclick="submitTrade()">Buy BTC</button>
-          <div id="tradeMsg" style="text-align:center; margin-top:10px; font-size:13px; font-weight:600;"></div>
-        </div>
-
-        <div style="width:110px;">
-          <div class="mini-ob">
-            <div class="ob-row text-red"><span><span id="obS3">0</span></span><span>1.2</span></div>
-            <div class="ob-row text-red"><span><span id="obS2">0</span></span><span>0.8</span></div>
-            <div class="ob-row text-red"><span><span id="obS1">0</span></span><span>2.4</span></div>
-            <div style="margin:8px 0; font-size:16px; font-weight:800; text-align:center;" id="tradePriceMid" class="text-green">0.00</div>
-            <div class="ob-row text-green"><span><span id="obB1">0</span></span><span>1.5</span></div>
-            <div class="ob-row text-green"><span><span id="obB2">0</span></span><span>3.1</span></div>
-            <div class="ob-row text-green"><span><span id="obB3">0</span></span><span>0.5</span></div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-<script>
-const clientPoll = {{ client_poll }};
-let marketData = {};
-let marketKeys = [];
-let prevPrices = {};
-let currentSymbol = null;
-let currentSide = 'buy';
-let userUsdt = 0;
-
-// Universal Toast Function
-function showToast(msg) {
-    const t = document.getElementById('toast');
-    t.innerText = msg;
-    t.style.display = 'block';
-    t.style.animation = 'none';
-    t.offsetHeight; // trigger reflow
-    t.style.animation = 'fadeInOut 2.5s ease-in-out forwards';
-    setTimeout(() => { t.style.display = 'none'; }, 2500);
-}
-
-// Deposit Logic
-function openDepositModal() { document.getElementById('depositModal').classList.add('show'); }
-function copyDepAddress() {
-    navigator.clipboard.writeText("TAMvBeCmd9VruNxPGjNamMR2wL9EMHNVnU");
-    const msg = document.getElementById('copyMsg');
-    msg.innerText = "Address Copied Successfuly!";
-    setTimeout(() => { msg.innerText = ""; }, 2500);
-}
-
-// Transfer Logic
-function openTransferModal() { 
-    document.getElementById('transferAmount').value = '';
-    document.getElementById('transferModal').classList.add('show'); 
-}
-function doTransfer() {
-    const amt = parseFloat(document.getElementById('transferAmount').value);
-    if(!amt || amt <= 0) { showToast('Enter a valid amount!'); return; }
-    if(amt > userUsdt) { showToast('Insufficient USDT Balance!'); return; }
-    showToast('Transferring ' + amt + ' USDT to Futures...');
-    setTimeout(()=>{ closeModal('transferModal'); showToast('Transfer Successful!'); }, 1000);
-}
-
-// UI Switchers
-function switchTab(el, tabName) {
-    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    el.classList.add('active');
-    showToast('Loading ' + tabName + ' pairs...');
-}
-
-function switchNav(el, navName, isTrade=false) {
-    document.querySelectorAll('.nav-item').forEach(t => t.classList.remove('active'));
-    el.classList.add('active');
-    if(isTrade) { openTrade('BTC'); }
-    else { showToast('Navigating to ' + navName + '...'); }
-}
-
-// Format numbers like real exchanges
-function fmtPrice(p){ 
-    if(p < 0.001) return p.toFixed(6);
-    if(p < 1) return p.toFixed(4);
-    if(p < 10) return p.toFixed(3);
-    return p.toFixed(2);
-}
-
-function commaNum(x) { return x.toString().replace(/\\B(?=(\\d{3})+(?!\\d))/g, ","); }
-
-async function fetchPrices(){
-  try{
-    const res = await fetch('/api/prices');
-    const j = await res.json();
-    marketData = j.data || {};
-    marketKeys = Object.keys(marketData || {});
-    renderMarketsLive(); // Improved rendering to stop flickering
-    if(currentSymbol && document.getElementById('tradeModal').classList.contains('show')) {
-        updateTradeModalLive();
-    }
-  }catch(e){}
-}
-
-async function fetchAccount(){
-  try{
-    const res = await fetch('/api/account');
-    const j = await res.json();
-    userUsdt = j.usdt || 0;
-    
-    // Fake PNL generation just for UI vibes
-    let pnlVal = (userUsdt * 0.015).toFixed(2);
-    document.getElementById('dailyPnl').innerText = `+${pnlVal} (1.50%) Today`;
-
-    document.getElementById('usdtBalance').innerText = commaNum(userUsdt.toFixed(2));
-    document.getElementById('sendAvailable').innerText = commaNum(userUsdt.toFixed(2)) + ' USDT';
-    if(currentSide === 'buy') document.getElementById('availBalance').innerText = commaNum(userUsdt.toFixed(2)) + ' USDT';
-  }catch(e){}
-}
-
-function renderMarketsLive(){
-  const container = document.getElementById('marketsList');
-  const q = (document.getElementById('searchInput').value || '').trim().toLowerCase();
-  
-  marketKeys.forEach(k => {
-    const it = marketData[k] || {};
-    const sym = it.symbol || k;
-    const name = (it.name || '');
-    const price = it.price ? Number(it.price) : 0;
-    const change = it.change_24h ? Number(it.change_24h) : 0;
-    const img = it.image || '';
-    
-    // Filtering
-    let el = document.getElementById('row-'+k);
-    if(q && !k.toLowerCase().includes(q) && !name.toLowerCase().includes(q)) {
-        if(el) el.style.display = 'none';
-        return;
-    }
-    
-    // Create row if not exists (Prevents DOM destruction and flickering)
-    if(!el) {
-        el = document.createElement('div');
-        el.id = 'row-'+k;
-        el.className = 'coin-row';
-        el.onclick = () => openTrade(k);
-        el.innerHTML = `
-          <div class="coin-info">
-            <img class="coin-img" src="${img}" alt="${sym}" onerror="this.src='https://cryptologos.cc/logos/tether-usdt-logo.png'">
-            <div>
-              <div style="font-weight:700; font-size:15px; display:flex; gap:6px; align-items:center;">
-                  ${sym} ${sym==='SLFR'?'<i class="fa-solid fa-fire text-accent" style="font-size:10px;"></i>':''}
-              </div>
-              <div class="text-muted" id="vol-${k}">Vol --</div>
+    <div id="main-view">
+        <header class="app-header">
+            <div class="logo-area">
+                <i class="fa-solid fa-fire"></i> SOLFIRE
             </div>
-          </div>
-          <div class="price-col" id="price-${k}">--</div>
-          <div style="text-align:right;">
-            <div class="change-btn" id="chg-${k}">--</div>
-          </div>
-        `;
-        container.appendChild(el);
-    }
-    el.style.display = 'grid';
+            <div class="header-icons">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <i class="fa-solid fa-qrcode"></i>
+                <i class="fa-regular fa-bell"></i>
+            </div>
+        </header>
 
-    // Update specific nodes cleanly
-    document.getElementById('vol-'+k).innerText = `Vol ${(price * 1250).toFixed(0).slice(0,4)}M`;
-    
-    const priceEl = document.getElementById('price-'+k);
-    const formattedPrice = fmtPrice(price);
-    
-    if(prevPrices[k] && price !== prevPrices[k]) {
-        priceEl.classList.remove('flash-up', 'flash-down');
-        void priceEl.offsetWidth; // Force CSS reflow
-        priceEl.classList.add(price > prevPrices[k] ? 'flash-up' : 'flash-down');
-    }
-    priceEl.innerText = formattedPrice;
-    prevPrices[k] = price;
+        <section class="balance-section">
+            <div class="balance-title">Total Balance</div>
+            <div class="balance-amount">0.00 <span style="font-size: 18px">USDT</span></div>
+            <div class="balance-sub text-green">+0.00 (1.50%) Today</div>
+            
+            <div class="action-buttons">
+                <div class="btn-action btn-deposit" onclick="showToast('Deposit address generated')">
+                    <i class="fa-solid fa-wallet"></i> Deposit
+                </div>
+                <div class="btn-action btn-secondary" onclick="showToast('Insufficient balance for withdrawal')">
+                    <i class="fa-solid fa-paper-plane"></i> Withdraw
+                </div>
+                <div class="btn-action btn-secondary" onclick="showToast('Transfer module ready')">
+                    <i class="fa-solid fa-right-left"></i> Transfer
+                </div>
+            </div>
+        </section>
 
-    const chgEl = document.getElementById('chg-'+k);
-    chgEl.className = 'change-btn ' + (change < 0 ? 'bg-red' : 'bg-green');
-    chgEl.innerText = (change > 0 ? '+' : '') + change.toFixed(2) + '%';
-  });
-}
+        <section class="grid-menu">
+            <div class="grid-item" onclick="openModal('p2p-modal')">
+                <div class="grid-icon"><i class="fa-solid fa-users"></i></div>
+                <span>P2P Trading</span>
+            </div>
+            <div class="grid-item" onclick="openModal('buy-crypto-modal')">
+                <div class="grid-icon"><i class="fa-solid fa-credit-card"></i></div>
+                <span>Buy Crypto</span>
+            </div>
+            <div class="grid-item" onclick="openModal('earn-modal')">
+                <div class="grid-icon"><i class="fa-solid fa-piggy-bank"></i></div>
+                <span>Earn</span>
+            </div>
+            <div class="grid-item" onclick="openModal('more-modal')">
+                <div class="grid-icon"><i class="fa-solid fa-ellipsis"></i></div>
+                <span>More</span>
+            </div>
+        </section>
 
-function openTrade(sym){
-  currentSymbol = sym;
-  document.getElementById('tradeTitle').innerText = sym + ' / USDT';
-  document.getElementById('tradeCoinSuffix').innerText = sym;
-  document.getElementById('tradeMsg').innerText = '';
-  document.getElementById('tradeMsg').className = '';
-  
-  setTradeSide('buy');
-  updateTradeModalLive();
-  document.getElementById('tradeModal').classList.add('show');
-}
+        <section class="market-section">
+            <div class="market-tabs">
+                <div class="market-tab"><i class="fa-solid fa-star"></i> Favorites</div>
+                <div class="market-tab active">Hot</div>
+                <div class="market-tab">Gainers</div>
+                <div class="market-tab">Losers</div>
+                <div class="market-tab">New Listings</div>
+            </div>
+            
+            <div class="market-list">
+                <div class="market-header">
+                    <span style="width: 40%">Name / Vol</span>
+                    <span style="width: 30%; text-align: right;">Last Price</span>
+                    <span style="width: 30%; text-align: right;">24h Chg%</span>
+                </div>
+                <div id="coin-container">
+                    </div>
+            </div>
+        </section>
 
-function updateTradeModalLive() {
-    if(!currentSymbol) return;
-    const it = marketData[currentSymbol] || {};
-    const p = it.price ? Number(it.price) : 0;
-    
-    document.getElementById('tradePriceMid').innerText = fmtPrice(p);
-    if(document.getElementById('tradeLimit').value === '' || document.getElementById('tradeType').value === 'market'){
-        document.getElementById('tradeLimit').value = fmtPrice(p);
-    }
+        <nav class="bottom-nav">
+            <div class="nav-item active"><i class="fa-solid fa-house"></i> Home</div>
+            <div class="nav-item"><i class="fa-solid fa-chart-simple"></i> Markets</div>
+            <div class="nav-item"><i class="fa-solid fa-money-bill-transfer"></i> Trade</div>
+            <div class="nav-item"><i class="fa-solid fa-bolt"></i> Futures</div>
+            <div class="nav-item"><i class="fa-solid fa-wallet"></i> Wallets</div>
+        </nav>
+    </div>
 
-    // Fake Orderbook generation around current price
-    const spread = p * 0.0008;
-    document.getElementById('obS3').innerText = fmtPrice(p + spread*3);
-    document.getElementById('obS2').innerText = fmtPrice(p + spread*2);
-    document.getElementById('obS1').innerText = fmtPrice(p + spread*1);
-    
-    document.getElementById('obB1').innerText = fmtPrice(p - spread*1);
-    document.getElementById('obB2').innerText = fmtPrice(p - spread*2);
-    document.getElementById('obB3').innerText = fmtPrice(p - spread*3);
-}
+    <div id="p2p-modal" class="full-modal">
+        <div class="modal-header">
+            <i class="fa-solid fa-arrow-left back-btn" onclick="closeModal('p2p-modal')"></i>
+            <div class="modal-title">P2P Trading</div>
+            <i class="fa-solid fa-ellipsis-vertical text-muted"></i>
+        </div>
+        <div class="modal-content">
+            <div class="p2p-tabs">
+                <div class="p2p-tab active buy">Buy</div>
+                <div class="p2p-tab">Sell</div>
+            </div>
+            <div class="p2p-filters">
+                <div class="p2p-filter-btn">Amount <i class="fa-solid fa-angle-down"></i></div>
+                <div class="p2p-filter-btn">Payment <i class="fa-solid fa-angle-down"></i></div>
+                <div class="p2p-filter-btn">Filter <i class="fa-solid fa-filter"></i></div>
+            </div>
+            
+            <div class="p2p-merchant">
+                <div class="merchant-header">
+                    <div class="merchant-name"><div class="merchant-badge">C</div> CryptoKing_Pro <i class="fa-solid fa-circle-check text-accent"></i></div>
+                    <div class="merchant-stats">2450 trades | 99.8%</div>
+                </div>
+                <div class="merchant-price text-green">1.02 USD</div>
+                <div class="flex justify-between items-center">
+                    <div class="merchant-limits">
+                        Crypto Amount: 5,430.50 USDT<br>
+                        Limit: $50.00 - $2,000.00
+                    </div>
+                    <button class="btn-p2p-buy" onclick="showToast('Order Placed with CryptoKing_Pro')">Buy</button>
+                </div>
+                <div style="font-size: 11px; color: var(--muted); display:flex; gap: 8px;">
+                    <span style="border-left: 2px solid var(--accent); padding-left: 4px;">Bank Transfer</span>
+                    <span style="border-left: 2px solid var(--accent); padding-left: 4px;">Wise</span>
+                </div>
+            </div>
 
-function setTradeSide(side) {
-    currentSide = side;
-    document.getElementById('btnBuy').classList.remove('selected');
-    document.getElementById('btnSell').classList.remove('selected');
-    const btn = document.getElementById('submitTradeBtn');
-    
-    if(side === 'buy') {
-        document.getElementById('btnBuy').classList.add('selected');
-        btn.innerText = 'Buy ' + currentSymbol;
-        btn.style.background = 'var(--green)';
-        document.getElementById('availBalance').innerText = commaNum(userUsdt.toFixed(2)) + ' USDT';
-    } else {
-        document.getElementById('btnSell').classList.add('selected');
-        btn.innerText = 'Sell ' + currentSymbol;
-        btn.style.background = 'var(--red)';
-        document.getElementById('availBalance').innerText = '-- ' + currentSymbol;
-    }
-}
+            <div class="p2p-merchant">
+                <div class="merchant-header">
+                    <div class="merchant-name"><div class="merchant-badge">F</div> FastPay_Global</div>
+                    <div class="merchant-stats">890 trades | 97.2%</div>
+                </div>
+                <div class="merchant-price text-green">1.03 USD</div>
+                <div class="flex justify-between items-center">
+                    <div class="merchant-limits">
+                        Crypto Amount: 1,200.00 USDT<br>
+                        Limit: $10.00 - $500.00
+                    </div>
+                    <button class="btn-p2p-buy" onclick="showToast('Order Placed with FastPay_Global')">Buy</button>
+                </div>
+                <div style="font-size: 11px; color: var(--muted); display:flex; gap: 8px;">
+                    <span style="border-left: 2px solid var(--accent); padding-left: 4px;">PayPal</span>
+                    <span style="border-left: 2px solid var(--accent); padding-left: 4px;">Skrill</span>
+                </div>
+            </div>
+        </div>
+    </div>
 
-document.getElementById('tradeType').addEventListener('change', (e) => {
-    document.getElementById('limitBox').style.display = e.target.value === 'limit' ? 'flex' : 'none';
-});
+    <div id="buy-crypto-modal" class="full-modal">
+        <div class="modal-header">
+            <i class="fa-solid fa-arrow-left back-btn" onclick="closeModal('buy-crypto-modal')"></i>
+            <div class="modal-title">Buy Crypto</div>
+            <i class="fa-solid fa-clock-rotate-left text-muted"></i>
+        </div>
+        <div class="modal-content">
+            <div class="buy-box">
+                <label class="text-muted font-semibold" style="display:block; margin-bottom: 8px;">Spend</label>
+                <div class="input-group">
+                    <input type="number" placeholder="100.00" id="fiat-amount" oninput="calculateCrypto()">
+                    <div class="coin-selector">USD <i class="fa-solid fa-angle-down"></i></div>
+                </div>
+                
+                <label class="text-muted font-semibold" style="display:block; margin-bottom: 8px;">Receive (Est.)</label>
+                <div class="input-group">
+                    <input type="text" placeholder="0.00" id="crypto-amount" readonly style="color: var(--accent);">
+                    <div class="coin-selector">USDT <i class="fa-solid fa-angle-down"></i></div>
+                </div>
+                
+                <div style="font-size: 13px; color: var(--muted); text-align: center; margin-bottom: 16px;">
+                    1 USDT ≈ 1.00 USD
+                </div>
+                
+                <button class="buy-huge-btn" onclick="simulatePurchase()">Buy USDT</button>
+            </div>
+            
+            <div style="margin-top: 24px;">
+                <h4 style="margin-bottom: 12px;">Payment Methods</h4>
+                <div class="flex items-center justify-between" style="background: var(--card); padding: 16px; border-radius: 12px; margin-bottom: 8px;">
+                    <div class="flex items-center gap-12">
+                        <i class="fa-brands fa-cc-visa" style="font-size: 24px; color: #1a1f36;"></i>
+                        <div>
+                            <div class="font-bold">Credit/Debit Card</div>
+                            <div style="font-size: 12px; color: var(--muted);">Fee: 2.0%</div>
+                        </div>
+                    </div>
+                    <i class="fa-regular fa-circle-check text-accent"></i>
+                </div>
+                <div class="flex items-center justify-between" style="background: var(--card); padding: 16px; border-radius: 12px;">
+                    <div class="flex items-center gap-12">
+                        <i class="fa-brands fa-apple" style="font-size: 24px;"></i>
+                        <div>
+                            <div class="font-bold">Apple Pay</div>
+                            <div style="font-size: 12px; color: var(--muted);">Fee: 1.5%</div>
+                        </div>
+                    </div>
+                    <i class="fa-regular fa-circle"></i>
+                </div>
+            </div>
+        </div>
+    </div>
 
-async function submitTrade(){
-  const type = document.getElementById('tradeType').value;
-  const qty = parseFloat(document.getElementById('tradeQty').value)||0;
-  const limit = parseFloat(document.getElementById('tradeLimit').value)||undefined;
-  const msgBox = document.getElementById('tradeMsg');
-  
-  if(qty <= 0){ msgBox.innerText='Enter valid quantity'; msgBox.className='text-red'; return; }
-  
-  btnLoad('submitTradeBtn', true);
-  const body = { symbol: currentSymbol, side: currentSide, type: type, quantity: qty };
-  if(type === 'limit') body.limit_price = limit;
-  
-  try {
-      const res = await fetch('/api/place_order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-      const j = await res.json();
-      if(j.ok){
-        msgBox.innerText = 'Order Placed Successfully!';
-        msgBox.className = 'text-green';
-        fetchAccount();
-      } else {
-        msgBox.innerText = j.error || 'Error';
-        msgBox.className = 'text-red';
-      }
-  } catch(e) {
-      msgBox.innerText = 'Network error';
-      msgBox.className = 'text-red';
-  }
-  btnLoad('submitTradeBtn', false, currentSide === 'buy' ? 'Buy '+currentSymbol : 'Sell '+currentSymbol);
-}
+    <div id="earn-modal" class="full-modal">
+        <div class="modal-header">
+            <i class="fa-solid fa-arrow-left back-btn" onclick="closeModal('earn-modal')"></i>
+            <div class="modal-title">Solfire Earn</div>
+            <i class="fa-solid fa-magnifying-glass text-muted"></i>
+        </div>
+        <div class="modal-content">
+            <div class="earn-hero">
+                <h2 style="margin:0 0 8px 0;">Earn Daily Rewards</h2>
+                <p style="color: var(--muted); font-size: 14px; margin:0;">Grow your crypto safely with Simple Earn</p>
+            </div>
+            
+            <h3 style="margin-bottom: 16px;">Trending Products</h3>
+            
+            <div class="earn-item">
+                <div class="flex items-center gap-12">
+                    <img src="https://assets.coingecko.com/coins/images/325/large/Tether.png" width="32" style="border-radius:50%;">
+                    <div>
+                        <div class="font-bold">USDT</div>
+                        <div style="font-size: 12px; color: var(--muted);">Flexible</div>
+                    </div>
+                </div>
+                <div style="text-align: right;">
+                    <div class="earn-apr">12.50%</div>
+                    <div style="font-size: 11px; color: var(--muted); margin-bottom: 6px;">Est. APR</div>
+                    <button class="btn-subscribe" onclick="showToast('Subscribed to USDT Earn!')">Subscribe</button>
+                </div>
+            </div>
 
-function openSendModal(){
-  document.getElementById('sendAmount').value = '';
-  document.getElementById('sendAddress').value = '';
-  document.getElementById('sendMsg').innerText = '';
-  document.getElementById('sendModal').classList.add('show');
-}
+            <div class="earn-item">
+                <div class="flex items-center gap-12">
+                    <img src="https://assets.coingecko.com/coins/images/4128/large/solana.png" width="32" style="border-radius:50%;">
+                    <div>
+                        <div class="font-bold">SOL</div>
+                        <div style="font-size: 12px; color: var(--muted);">Locked (30 Days)</div>
+                    </div>
+                </div>
+                <div style="text-align: right;">
+                    <div class="earn-apr">8.20%</div>
+                    <div style="font-size: 11px; color: var(--muted); margin-bottom: 6px;">Est. APR</div>
+                    <button class="btn-subscribe" onclick="showToast('Subscribed to SOL Staking!')">Subscribe</button>
+                </div>
+            </div>
+            
+            <div class="earn-item">
+                <div class="flex items-center gap-12">
+                    <img src="https://cryptologos.cc/logos/fire-token-fire-logo.png" width="32" style="border-radius:50%;">
+                    <div>
+                        <div class="font-bold">SLFR (Solfire)</div>
+                        <div style="font-size: 12px; color: var(--muted);">Locked (90 Days)</div>
+                    </div>
+                </div>
+                <div style="text-align: right;">
+                    <div class="earn-apr">45.00%</div>
+                    <div style="font-size: 11px; color: var(--muted); margin-bottom: 6px;">Est. APR</div>
+                    <button class="btn-subscribe" onclick="showToast('Subscribed to SLFR High Yield!')">Subscribe</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
-function closeModal(id){ document.getElementById(id).classList.remove('show'); }
+    <div id="more-modal" class="full-modal">
+        <div class="modal-header">
+            <i class="fa-solid fa-arrow-left back-btn" onclick="closeModal('more-modal')"></i>
+            <div class="modal-title">Services</div>
+            <i class="fa-solid fa-pen-to-square text-muted"></i>
+        </div>
+        <div class="modal-content">
+            
+            <div class="more-section">
+                <div class="more-section-title">Common Functions</div>
+                <div class="more-grid">
+                    <div class="more-item" onclick="showToast('Transfer opened')"><div class="more-icon"><i class="fa-solid fa-right-left"></i></div>Transfer</div>
+                    <div class="more-item" onclick="showToast('Deposit opened')"><div class="more-icon"><i class="fa-solid fa-wallet"></i></div>Deposit</div>
+                    <div class="more-item" onclick="showToast('Orders history')"><div class="more-icon"><i class="fa-solid fa-file-invoice"></i></div>Orders</div>
+                    <div class="more-item" onclick="showToast('Referral program')"><div class="more-icon"><i class="fa-solid fa-user-plus"></i></div>Referral</div>
+                </div>
+            </div>
 
-async function doSend(){
-  const amount = parseFloat(document.getElementById('sendAmount').value) || 0;
-  const address = document.getElementById('sendAddress').value.trim();
-  const network = document.getElementById('sendNetwork').value;
-  const msgBox = document.getElementById('sendMsg');
-  
-  if(amount <= 0){ msgBox.innerText = 'Enter valid amount'; msgBox.className='text-red'; return; }
-  if(!address){ msgBox.innerText = 'Enter address'; msgBox.className='text-red'; return; }
-  
-  const res = await fetch('/api/withdraw', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({amount: amount, address: address, network: network})});
-  const j = await res.json();
-  if(j.ok){
-    msgBox.innerText = 'Withdrawal Processing...';
-    msgBox.className = 'text-green';
-    fetchAccount();
-    setTimeout(()=> closeModal('sendModal'), 1500);
-  } else {
-    msgBox.innerText = j.error || 'Error';
-    msgBox.className = 'text-red';
-  }
-}
+            <div class="more-section">
+                <div class="more-section-title">Trade</div>
+                <div class="more-grid">
+                    <div class="more-item" onclick="closeModal('more-modal')"><div class="more-icon"><i class="fa-solid fa-chart-line"></i></div>Spot</div>
+                    <div class="more-item" onclick="showToast('Margin Trading')"><div class="more-icon"><i class="fa-solid fa-scale-balanced"></i></div>Margin</div>
+                    <div class="more-item" onclick="openModal('p2p-modal')"><div class="more-icon"><i class="fa-solid fa-users"></i></div>P2P</div>
+                    <div class="more-item" onclick="showToast('Trading Bots')"><div class="more-icon"><i class="fa-solid fa-robot"></i></div>Bots</div>
+                </div>
+            </div>
 
-function btnLoad(id, isLoading, originalText = '') {
-    const b = document.getElementById(id);
-    if(isLoading) { b.disabled = true; b.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>'; }
-    else { b.disabled = false; b.innerText = originalText; }
-}
+            <div class="more-section">
+                <div class="more-section-title">Finance</div>
+                <div class="more-grid">
+                    <div class="more-item" onclick="openModal('earn-modal')"><div class="more-icon"><i class="fa-solid fa-piggy-bank"></i></div>Earn</div>
+                    <div class="more-item" onclick="showToast('Crypto Loans')"><div class="more-icon"><i class="fa-solid fa-hand-holding-dollar"></i></div>Loans</div>
+                    <div class="more-item" onclick="showToast('Solfire Pay')"><div class="more-icon"><i class="fa-brands fa-alipay"></i></div>Pay</div>
+                    <div class="more-item" onclick="showToast('Launchpad')"><div class="more-icon"><i class="fa-solid fa-rocket"></i></div>Launchpad</div>
+                </div>
+            </div>
+            
+            <div class="more-section">
+                <div class="more-section-title">Information</div>
+                <div class="more-grid">
+                    <div class="more-item" onclick="showToast('Market Data')"><div class="more-icon"><i class="fa-solid fa-globe"></i></div>Markets</div>
+                    <div class="more-item" onclick="showToast('Solfire Academy')"><div class="more-icon"><i class="fa-solid fa-graduation-cap"></i></div>Academy</div>
+                    <div class="more-item" onclick="showToast('News Feed')"><div class="more-icon"><i class="fa-regular fa-newspaper"></i></div>News</div>
+                    <div class="more-item" onclick="showToast('Support Center')"><div class="more-icon"><i class="fa-solid fa-headset"></i></div>Support</div>
+                </div>
+            </div>
 
-// Search filtering trigger
-document.getElementById('searchInput').addEventListener('input', renderMarketsLive);
+        </div>
+    </div>
 
-// Initialization & Loops
-fetchAccount();
-fetchPrices();
-setInterval(fetchPrices, clientPoll); // Frontend polling every 1.5s
-</script>
-</body></html>
+    <div id="toast-container"></div>
+
+    <script>
+        // Modal Logic
+        function openModal(id) {
+            document.getElementById(id).classList.add('active');
+            document.body.style.overflow = 'hidden'; // Prevent background scrolling
+        }
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('active');
+            document.body.style.overflow = 'auto';
+        }
+
+        // Toast Logic
+        function showToast(message) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.innerHTML = `<i class="fa-solid fa-circle-info"></i> ${message}`;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // Buy Crypto Form Logic
+        function calculateCrypto() {
+            const fiat = document.getElementById('fiat-amount').value;
+            const cryptoInput = document.getElementById('crypto-amount');
+            if(fiat && fiat > 0) {
+                cryptoInput.value = (fiat * 1).toFixed(2); // Mock rate 1:1
+            } else {
+                cryptoInput.value = '';
+            }
+        }
+        function simulatePurchase() {
+            const fiat = document.getElementById('fiat-amount').value;
+            if(!fiat || fiat <= 0) {
+                showToast("Please enter an amount");
+                return;
+            }
+            showToast(`Processing payment of $${fiat}...`);
+            setTimeout(() => {
+                showToast(`Successfully purchased ${fiat} USDT!`);
+                document.getElementById('fiat-amount').value = '';
+                document.getElementById('crypto-amount').value = '';
+                closeModal('buy-crypto-modal');
+            }, 1500);
+        }
+
+        // Market Data Fetching (Uses your existing backend)
+        const coinContainer = document.getElementById("coin-container");
+        
+        async function fetchPrices() {
+            try {
+                const res = await fetch("/api/prices");
+                const json = await res.json();
+                renderMarket(json.data);
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        function renderMarket(data) {
+            // Sort to show specific coins like the image (ADA, APT, ARB first)
+            const targetCoins = ["ADA", "APT", "ARB", "BTC", "ETH", "SOL", "SLFR"];
+            let html = "";
+            
+            targetCoins.forEach(sym => {
+                if(data[sym]) {
+                    const c = data[sym];
+                    const changeClass = c.change_24h >= 0 ? "bg-green" : "bg-red";
+                    const changeSign = c.change_24h >= 0 ? "+" : "";
+                    
+                    // Mock volume string based on market cap / price visually
+                    const volStr = "Vol " + Math.floor(Math.random() * 500 + 100) + "M";
+
+                    html += `
+                    <div class="coin-row" onclick="showToast('Trading ${c.symbol} coming soon')">
+                        <div class="coin-info">
+                            <img class="coin-img" src="${c.image}" alt="${c.symbol}">
+                            <div>
+                                <div class="coin-name">${c.symbol}</div>
+                                <div class="coin-vol">${volStr}</div>
+                            </div>
+                        </div>
+                        <div class="coin-price">${c.price < 1 ? c.price.toFixed(4) : c.price.toFixed(2)}</div>
+                        <div class="coin-change">
+                            <div class="change-badge ${changeClass}">${changeSign}${c.change_24h.toFixed(2)}%</div>
+                        </div>
+                    </div>`;
+                }
+            });
+            coinContainer.innerHTML = html;
+        }
+
+        // Initialize
+        fetchPrices();
+        setInterval(fetchPrices, 1500); // Super fast updates as configured in backend
+    </script>
+</body>
+</html>
 """
-    return render_template_string(html, user=user, wallet=WALLET_ADDRESS, network=NETWORK_LABEL, client_poll=CLIENT_POLL_MS)
+    return render_template_string(html)
 
-# ---------- run ----------
 if __name__ == "__main__":
-    fetch_prices_once()
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=False)
+    app.run(debug=True, threaded=True, port=5000)
